@@ -8,10 +8,27 @@ datasource db {
 }
 
 model Material {
-  id          Int      @id @default(autoincrement())
-  nome        String
-  descricao   String?
-  quantidade  Int
-  localizacao String?
-  criadoEm    DateTime @default(now())
+  id            Int              @id @default(autoincrement())
+  nome          String
+  descricao     String?
+  quantidade    Int
+  localizacao   String?
+  estoqueMinimo Int              @default(5)
+  categoria     String?
+  criadoEm      DateTime         @default(now())
+  atualizadoEm  DateTime         @updatedAt
+  movimentacoes Movimentacao[]
+}
+
+model Movimentacao {
+  id           Int      @id @default(autoincrement())
+  materialId   Int
+  material     Material @relation(fields: [materialId], references: [id], onDelete: Cascade)
+  tipo         String   // "entrada" ou "saida"
+  quantidade   Int
+  tecnico      String
+  observacao   String?
+  dataHora     DateTime @default(now())
+  quantidadeAnterior Int
+  quantidadeAtual    Int
 }
