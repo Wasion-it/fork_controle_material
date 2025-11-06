@@ -345,7 +345,7 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950">
+    <div className="min-h-screen w-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950">
       {alert.show && (
         <div className={`fixed top-6 right-6 z-50 px-6 py-4 rounded-xl shadow-2xl flex items-center gap-3 backdrop-blur-md border-2 animate-[slideIn_0.3s_ease-out] ${
           alert.type === "success"
@@ -357,9 +357,9 @@ export default function App() {
         </div>
       )}
 
-      <div className="bg-gradient-to-r from-slate-900/95 to-slate-800/95 shadow-2xl border-b-2 border-slate-700/50 backdrop-blur-xl sticky top-0 z-40">
-        <div className="max-w-7xl mx-auto px-6 py-5">
-          <div className="flex items-center justify-between mb-5">
+      <div className="w-screen bg-gradient-to-r from-slate-900/95 to-slate-800/95 shadow-2xl border-b-2 border-slate-700/50 backdrop-blur-xl sticky top-0 z-40">
+        <div className="w-full px-4 sm:px-6 lg:px-8 py-5">
+          <div className="flex items-center justify-between mb-5 w-full">
             <div className="flex items-center gap-4">
               <div className="p-3 bg-gradient-to-br from-blue-500 via-blue-600 to-cyan-500 rounded-xl shadow-xl shadow-blue-500/40 ring-2 ring-blue-400/30">
                 <Package className="text-white" size={32} />
@@ -432,7 +432,7 @@ export default function App() {
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto px-6 py-8">
+      <div className="w-screen px-4 sm:px-6 lg:px-8 py-8">
         {loading && (
           <div className="flex items-center justify-center py-20">
             <div className="flex flex-col items-center gap-4">
@@ -443,8 +443,8 @@ export default function App() {
         )}
 
         {activeTab === "dashboard" && estatisticas && !loading && (
-          <div className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
+          <div className="space-y-6 w-full">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-4 gap-5 w-full">
               {[
                 { label: "Total de Materiais", value: estatisticas.totalMateriais, icon: Package, color: "blue", gradient: "from-blue-500 to-blue-600", ring: "ring-blue-400/30" },
                 { label: "Materiais Ativos", value: estatisticas.materiaisAtivos, icon: CheckCircle, color: "emerald", gradient: "from-emerald-500 to-emerald-600", ring: "ring-emerald-400/30" },
@@ -475,7 +475,7 @@ export default function App() {
                 </div>
                 Materiais por Categoria
               </h3>
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 2xl:grid-cols-8 gap-3 w-full">
                 {estatisticas.categorias.map((cat, idx) => (
                   <div key={idx} className="flex items-center justify-between p-4 bg-gradient-to-br from-slate-700/50 to-slate-800/50 rounded-lg border-2 border-slate-600/40 hover:border-blue-500/60 transition-all duration-300 hover:scale-105 shadow-lg">
                     <span className="font-bold text-slate-200 text-base">{cat.nome}</span>
@@ -490,8 +490,8 @@ export default function App() {
         )}
 
         {activeTab === "movimentacoes" && !loading && (
-          <div className="bg-gradient-to-br from-slate-800/90 to-slate-900/90 rounded-xl shadow-xl border-2 border-slate-700/50">
-            <div className="p-6 border-b-2 border-slate-700/50 bg-gradient-to-r from-slate-800/50 to-slate-900/50">
+          <div className="w-full bg-gradient-to-br from-slate-800/90 to-slate-900/90 rounded-xl shadow-xl border-2 border-slate-700/50">
+            <div className="w-full p-6 border-b-2 border-slate-700/50 bg-gradient-to-r from-slate-800/50 to-slate-900/50">
               <h2 className="text-2xl font-black text-slate-200 flex items-center gap-3">
                 <div className="p-2 bg-blue-500/20 rounded-lg ring-2 ring-blue-400/30">
                   <History className="text-blue-400" size={24} />
@@ -630,7 +630,7 @@ export default function App() {
               </div>
             </div>
 
-            <div className="grid gap-3">
+            <div className="grid gap-3 w-full">
               {filteredMateriais.length === 0 ? (
                 <div className="bg-gradient-to-br from-slate-800/90 to-slate-900/90 rounded-xl shadow-xl p-12 text-center border-2 border-slate-700/50">
                   <Package className="mx-auto text-slate-500 mb-4" size={64} />
