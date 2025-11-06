@@ -39,7 +39,8 @@ model Movimentacao {
   material           Material @relation(fields: [materialId], references: [id], onDelete: Cascade)
   tipo               String   // "entrada" ou "saida"
   quantidade         Int
-  tecnico            String
+  tecnico            String   // Nome do usuário que fez a movimentação
+  userId             Int?     // ID do usuário que fez a movimentação
   observacao         String?
   dataHora           DateTime @default(now())
   quantidadeAnterior Int

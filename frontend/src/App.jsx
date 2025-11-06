@@ -39,7 +39,6 @@ export default function App() {
   const [movimentacao, setMovimentacao] = useState({
     quantidade: 0,
     tipo: "saida",
-    tecnico: "",
     observacao: ""
   });
 
@@ -156,9 +155,6 @@ export default function App() {
     if (movimentacao.tipo === "saida" && materialSelecionado && movimentacao.quantidade > materialSelecionado.quantidade) {
       newErrors.quantidade = "Quantidade maior que o estoque disponível";
     }
-    if (!movimentacao.tecnico.trim()) {
-      newErrors.tecnico = "Nome do técnico é obrigatório";
-    }
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -236,18 +232,19 @@ export default function App() {
 
     try {
       setIsSubmitting(true);
+      const user = AuthService.getUser();
       const data = await api.post('/movimentacoes', {
         materialId: materialSelecionado.id,
         tipo: movimentacao.tipo,
         quantidade: Number(movimentacao.quantidade),
-        tecnico: movimentacao.tecnico.trim(),
+        tecnico: user.nome, // Usando o nome do usuário logado
         observacao: movimentacao.observacao?.trim() || null
       });
 
       await carregarDados();
       setShowMovimentacaoModal(false);
       setMaterialSelecionado(null);
-      setMovimentacao({ quantidade: 0, tipo: "saida", tecnico: "", observacao: "" });
+      setMovimentacao({ quantidade: 0, tipo: "saida", observacao: "" });
       setErrors({});
       showAlert(`${movimentacao.tipo === "entrada" ? "Entrada" : "Saída"} registrada com sucesso!`, "success");
     } catch (error) {
@@ -815,12 +812,6 @@ export default function App() {
                 <input type="number" value={movimentacao.quantidade} onChange={(e) => setMovimentacao(prev => ({...prev, quantidade: Number(e.target.value)}))} className={`w-full px-3 py-2 border rounded-lg outline-none ${errors.quantidade ? 'border-red-500' : 'border-slate-700 bg-slate-800/50'} text-slate-100`} />
                 {errors.quantidade && <p className="text-xs text-red-400 mt-1">{errors.quantidade}</p>}
                 <p className="text-xs text-slate-400 mt-1">Estoque atual: {materialSelecionado.quantidade} un.</p>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-slate-300 mb-1">Técnico</label>
-                <input value={movimentacao.tecnico} onChange={(e) => setMovimentacao(prev => ({...prev, tecnico: e.target.value}))} className={`w-full px-3 py-2 border rounded-lg outline-none ${errors.tecnico ? 'border-red-500' : 'border-slate-700 bg-slate-800/50'} text-slate-100`} />
-                {errors.tecnico && <p className="text-xs text-red-400 mt-1">{errors.tecnico}</p>}
               </div>
 
               <div>
