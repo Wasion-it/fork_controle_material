@@ -71,6 +71,22 @@ app.put("/materiais/:id", async (req, res) => {
   }
 });
 
+// ✅ Histórico de movimentações de um material (rota compatível)
+app.get("/movimentacoes/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const movimentacoes = await prisma.movimentacao.findMany({
+      where: { materialId: Number(id) },
+      orderBy: { dataHora: "desc" },
+      include: { material: true },
+    });
+    res.json(movimentacoes);
+  } catch (error) {
+    res.status(500).json({ error: "Erro ao buscar histórico do material." });
+  }
+});
+
+
 // ✅ Desativar / Reativar material
 app.patch("/materiais/:id/status", async (req, res) => {
   try {
@@ -121,6 +137,21 @@ app.post("/movimentacoes", async (req, res) => {
     res.json(movimentacao);
   } catch (error) {
     res.status(500).json({ error: "Erro ao registrar movimentação." });
+  }
+});
+
+// ✅ Listar todas as movimentações (com limite opcional)
+app.get("/movimentacoes", async (req, res) => {
+  try {
+    const limit = req.query.limit ? Number(req.query.limit) : undefined;
+    const movimentacoes = await prisma.movimentacao.findMany({
+      take: limit,
+      orderBy: { dataHora: "desc" },
+      include: { material: true }
+    });
+    res.json(movimentacoes);
+  } catch (error) {
+    res.status(500).json({ error: "Erro ao buscar movimentações." });
   }
 });
 

@@ -2,9 +2,8 @@ import React, { useEffect, useState } from "react";
 import { 
   Package, Search, Plus, Edit2, Trash2, AlertCircle, CheckCircle, X, Save, 
   TrendingUp, TrendingDown, History, BarChart3, Filter, FileText, Download,
-  AlertTriangle, Archive, Eye, Calendar, Users, Loader2
+  AlertTriangle, Archive, Eye, Calendar, Users, Loader2, RefreshCw, MapPin, Box
 } from "lucide-react";
-import { CSVLink } from "react-csv";
 
 export default function App() {
   const [materiais, setMateriais] = useState([]);
@@ -262,6 +261,7 @@ export default function App() {
       await carregarDados();
       setShowMovimentacaoModal(false);
       setMaterialSelecionado(null);
+      setMovimentacao({ quantidade: 0, tipo: "saida", tecnico: "", observacao: "" });
       setErrors({});
       showAlert(`${movimentacao.tipo === "entrada" ? "Entrada" : "Saída"} registrada com sucesso!`, "success");
     } catch (error) {
@@ -271,39 +271,23 @@ export default function App() {
     }
   };
 
-  const abrirHistorico = async (material) => {
-    try {
-      const response = await fetch(`http://localhost:3001/materiais/${material.id}`);
-      const data = await response.json();
-      setMaterialSelecionado(data);
-      setShowHistoricoModal(true);
-    } catch (error) {
-      showAlert("Erro ao carregar histórico", "error");
-    }
-  };
+const abrirHistorico = async (material) => {
+  try {
+    const response = await fetch(`http://localhost:3001/materiais/${material.id}/movimentacoes`);
+    const data = await response.json();
+    setMaterialSelecionado({ ...material, movimentacoes: data });
+    setShowHistoricoModal(true);
+  } catch (error) {
+    showAlert("Erro ao carregar histórico", "error");
+  }
+};
 
-  const gerarRelatorio = async () => {
-    try {
-      const params = new URLSearchParams();
-      if (filtroRelatorio.dataInicio) params.append('dataInicio', filtroRelatorio.dataInicio);
-      if (filtroRelatorio.dataFim) params.append('dataFim', filtroRelatorio.dataFim);
-      if (filtroRelatorio.tipo) params.append('tipo', filtroRelatorio.tipo);
-
-      const response = await fetch(`http://localhost:3001/relatorios/movimentacoes?${params}`);
-      const data = await response.json();
-      console.log("Relatório:", data);
-      setShowRelatorioModal(false);
-      showAlert("Relatório gerado com sucesso! Você pode baixar em CSV.", "success");
-    } catch (error) {
-      showAlert("Erro ao gerar relatório", "error");
-    }
-  };
 
   const getStatusColor = (material) => {
-    if (!material.ativo) return "text-gray-600 bg-gray-50";
-    if (material.quantidade === 0) return "text-red-600 bg-red-50";
-    if (material.quantidade <= material.estoqueMinimo) return "text-yellow-600 bg-yellow-50";
-    return "text-green-600 bg-green-50";
+    if (!material.ativo) return "text-slate-400 bg-slate-700/30";
+    if (material.quantidade === 0) return "text-red-400 bg-red-500/20";
+    if (material.quantidade <= material.estoqueMinimo) return "text-amber-400 bg-amber-500/20";
+    return "text-emerald-400 bg-emerald-500/20";
   };
 
   const getStatusBadge = (material) => {
@@ -322,175 +306,168 @@ export default function App() {
     }
   };
 
-  // --- Helpers para CSV / Export ---
-  const csvData = (items) => {
-    return items.map(m => ({
-      id: m.id,
-      nome: m.nome,
-      descricao: m.descricao,
-      quantidade: m.quantidade,
-      estoqueMinimo: m.estoqueMinimo,
-      categoria: m.categoria,
-      localizacao: m.localizacao,
-      ativo: m.ativo ? 'Sim' : 'Não',
-      atualizadoEm: formatDate(m.atualizadoEm)
-    }));
+  const exportarCSV = () => {
+    const headers = ["ID", "Nome", "Descrição", "Quantidade", "Estoque Mínimo", "Categoria", "Localização", "Status", "Atualizado Em"];
+    const rows = materiais.map(m => [
+      m.id,
+      m.nome,
+      m.descricao,
+      m.quantidade,
+      m.estoqueMinimo,
+      m.categoria || "-",
+      m.localizacao,
+      m.ativo ? "Ativo" : "Inativo",
+      formatDate(m.atualizadoEm)
+    ]);
+
+    let csvContent = headers.join(",") + "\n";
+    rows.forEach(row => {
+      csvContent += row.map(cell => `"${cell}"`).join(",") + "\n";
+    });
+
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = `materiais_${new Date().toISOString().split('T')[0]}.csv`;
+    link.click();
+    showAlert("Exportação realizada com sucesso!", "success");
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-100">
-      {/* Alert */}
+    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950">
       {alert.show && (
-        <div className={`fixed top-4 right-4 z-50 px-6 py-4 rounded-lg shadow-lg flex items-center gap-3 ${
-          alert.type === "success" ? "bg-green-500" : "bg-red-500"
-        } text-white animate-fade-in`}>
-          {alert.type === "success" ? <CheckCircle size={20} /> : <AlertCircle size={20} />}
-          {alert.message}
+        <div className={`fixed top-6 right-6 z-50 px-6 py-4 rounded-2xl shadow-2xl flex items-center gap-3 backdrop-blur-md border-2 animate-[slideIn_0.3s_ease-out] ${
+          alert.type === "success" 
+            ? "bg-gradient-to-r from-emerald-500 to-emerald-600 border-emerald-400/50 shadow-emerald-500/50" 
+            : "bg-gradient-to-r from-red-500 to-red-600 border-red-400/50 shadow-red-500/50"
+        } text-white`}>
+          {alert.type === "success" ? <CheckCircle size={22} /> : <AlertCircle size={22} />}
+          <span className="font-semibold text-base">{alert.message}</span>
         </div>
       )}
 
-      {/* Header */}
-      <div className="bg-white shadow-md border-b">
+      <div className="bg-gradient-to-r from-slate-900/95 to-slate-800/95 shadow-2xl border-b-2 border-slate-700/50 backdrop-blur-xl sticky top-0 z-40">
         <div className="max-w-7xl mx-auto px-6 py-6">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="p-3 bg-blue-600 rounded-xl">
-                <Package className="text-white" size={32} />
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center gap-4">
+              <div className="p-4 bg-gradient-to-br from-blue-500 via-blue-600 to-cyan-500 rounded-2xl shadow-2xl shadow-blue-500/40 ring-4 ring-blue-400/20 transform hover:scale-105 transition-transform">
+                <Package className="text-white" size={40} />
               </div>
               <div>
-                <h1 className="text-3xl font-bold text-slate-800">Controle de Estoque TI</h1>
-                <p className="text-slate-600 text-sm">Sistema completo de gerenciamento e auditoria</p>
+                <h1 className="text-4xl font-extrabold bg-gradient-to-r from-blue-400 via-cyan-300 to-blue-300 bg-clip-text text-transparent drop-shadow-lg">
+                  Controle de Estoque TI
+                </h1>
+                <p className="text-slate-400 text-sm mt-1 font-medium flex items-center gap-2">
+                  <span className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></span>
+                  Sistema profissional de gerenciamento e auditoria
+                </p>
               </div>
             </div>
-            <div className="flex gap-2">
+            <div className="flex gap-3">
               <button
                 onClick={() => setShowRelatorioModal(true)}
-                className="flex items-center gap-2 bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg font-medium transition-colors"
+                className="flex items-center gap-2 bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 text-white px-5 py-3.5 rounded-xl font-semibold transition-all duration-200 shadow-xl shadow-purple-500/40 hover:shadow-purple-500/60 hover:scale-105 border border-purple-400/30"
               >
-                <FileText size={18} />
-                Relatórios
+                <FileText size={20} />
+                <span className="hidden sm:inline">Relatórios</span>
               </button>
 
-              <CSVLink data={csvData(materiais)} filename={"materiais_export.csv"} className="flex items-center gap-2 bg-slate-100 hover:bg-slate-200 px-4 py-2 rounded-lg text-slate-700">
-                <Download size={16} /> Exportar CSV
-              </CSVLink>
+              <button
+                onClick={exportarCSV}
+                className="flex items-center gap-2 bg-gradient-to-r from-slate-700 to-slate-800 hover:from-slate-600 hover:to-slate-700 text-white px-5 py-3.5 rounded-xl font-semibold transition-all duration-200 shadow-xl hover:scale-105 border border-slate-600/50"
+              >
+                <Download size={20} />
+                <span className="hidden sm:inline">Exportar</span>
+              </button>
+
+              <button
+                onClick={carregarDados}
+                className="flex items-center gap-2 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white px-5 py-3.5 rounded-xl font-semibold transition-all duration-200 shadow-xl shadow-blue-500/40 hover:scale-105 border border-blue-400/30"
+              >
+                <RefreshCw size={20} className={loading ? "animate-spin" : ""} />
+              </button>
             </div>
           </div>
 
-          {/* Tabs */}
-          <div className="flex gap-2 mt-6 border-b">
-            <button
-              onClick={() => setActiveTab("estoque")}
-              className={`px-6 py-3 font-medium transition-colors border-b-2 ${
-                activeTab === "estoque"
-                  ? "border-blue-600 text-blue-600"
-                  : "border-transparent text-slate-600 hover:text-slate-800"
-              }`}
-            >
-              <div className="flex items-center gap-2">
-                <Package size={18} />
-                Estoque
-              </div>
-            </button>
-            <button
-              onClick={() => setActiveTab("movimentacoes")}
-              className={`px-6 py-3 font-medium transition-colors border-b-2 ${
-                activeTab === "movimentacoes"
-                  ? "border-blue-600 text-blue-600"
-                  : "border-transparent text-slate-600 hover:text-slate-800"
-              }`}
-            >
-              <div className="flex items-center gap-2">
-                <History size={18} />
-                Movimentações
-              </div>
-            </button>
-            <button
-              onClick={() => setActiveTab("dashboard")}
-              className={`px-6 py-3 font-medium transition-colors border-b-2 ${
-                activeTab === "dashboard"
-                  ? "border-blue-600 text-blue-600"
-                  : "border-transparent text-slate-600 hover:text-slate-800"
-              }`}
-            >
-              <div className="flex items-center gap-2">
-                <BarChart3 size={18} />
-                Dashboard
-              </div>
-            </button>
+          <div className="flex gap-2 border-b-2 border-slate-700/50">
+            {[
+              { id: "estoque", label: "Estoque", icon: Package },
+              { id: "movimentacoes", label: "Movimentações", icon: History },
+              { id: "dashboard", label: "Dashboard", icon: BarChart3 }
+            ].map(tab => {
+              const Icon = tab.icon;
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`px-8 py-4 font-bold transition-all duration-200 border-b-4 relative rounded-t-xl ${
+                    activeTab === tab.id
+                      ? "border-blue-500 text-blue-400 bg-slate-800/60"
+                      : "border-transparent text-slate-400 hover:text-slate-200 hover:bg-slate-800/40"
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    <Icon size={22} />
+                    <span>{tab.label}</span>
+                  </div>
+                  {activeTab === tab.id && (
+                    <div className="absolute inset-0 bg-gradient-to-t from-blue-500/20 to-transparent rounded-t-xl -z-10"></div>
+                  )}
+                </button>
+              );
+            })}
           </div>
         </div>
       </div>
 
       <div className="max-w-7xl mx-auto px-6 py-8">
         {loading && (
-          <div className="flex items-center justify-center py-8">
-            <Loader2 className="animate-spin" />
-            <span className="ml-2 text-slate-600">Carregando...</span>
+          <div className="flex items-center justify-center py-16">
+            <div className="flex flex-col items-center gap-4">
+              <Loader2 className="animate-spin text-blue-400" size={48} />
+              <span className="text-slate-300 text-xl font-semibold">Carregando dados...</span>
+            </div>
           </div>
         )}
 
-        {/* Dashboard Tab */}
-        {activeTab === "dashboard" && estatisticas && (
+        {activeTab === "dashboard" && estatisticas && !loading && (
           <div className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-              <div className="bg-white rounded-xl shadow-sm p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-slate-600 mb-1">Total de Materiais</p>
-                    <p className="text-3xl font-bold text-slate-800">{estatisticas.totalMateriais}</p>
+              {[
+                { label: "Total de Materiais", value: estatisticas.totalMateriais, icon: Package, color: "blue", gradient: "from-blue-500 to-blue-700", ring: "ring-blue-400/40" },
+                { label: "Materiais Ativos", value: estatisticas.materiaisAtivos, icon: CheckCircle, color: "emerald", gradient: "from-emerald-500 to-emerald-700", ring: "ring-emerald-400/40" },
+                { label: "Baixo Estoque", value: estatisticas.materiaisBaixoEstoque, icon: AlertTriangle, color: "amber", gradient: "from-amber-500 to-amber-700", ring: "ring-amber-400/40" },
+                { label: "Movimentações Hoje", value: estatisticas.movimentacoesHoje, icon: TrendingUp, color: "purple", gradient: "from-purple-500 to-purple-700", ring: "ring-purple-400/40" }
+              ].map((stat, idx) => {
+                const Icon = stat.icon;
+                return (
+                  <div key={idx} className="bg-gradient-to-br from-slate-800/90 to-slate-900/90 rounded-2xl shadow-2xl p-6 border-2 border-slate-700/50 hover:border-slate-600/70 transition-all duration-300 hover:scale-105 hover:shadow-xl">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm text-slate-400 mb-3 font-semibold uppercase tracking-wide">{stat.label}</p>
+                        <p className={`text-5xl font-black text-${stat.color}-400 drop-shadow-lg`}>{stat.value}</p>
+                      </div>
+                      <div className={`p-5 bg-gradient-to-br ${stat.gradient} rounded-2xl ring-4 ${stat.ring} shadow-2xl shadow-${stat.color}-500/30`}>
+                        <Icon className="text-white" size={32} />
+                      </div>
+                    </div>
                   </div>
-                  <div className="p-3 bg-blue-100 rounded-lg">
-                    <Package className="text-blue-600" size={24} />
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-white rounded-xl shadow-sm p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-slate-600 mb-1">Materiais Ativos</p>
-                    <p className="text-3xl font-bold text-green-600">{estatisticas.materiaisAtivos}</p>
-                  </div>
-                  <div className="p-3 bg-green-100 rounded-lg">
-                    <CheckCircle className="text-green-600" size={24} />
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-white rounded-xl shadow-sm p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-slate-600 mb-1">Baixo Estoque</p>
-                    <p className="text-3xl font-bold text-yellow-600">{estatisticas.materiaisBaixoEstoque}</p>
-                  </div>
-                  <div className="p-3 bg-yellow-100 rounded-lg">
-                    <AlertTriangle className="text-yellow-600" size={24} />
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-white rounded-xl shadow-sm p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-slate-600 mb-1">Movimentações Hoje</p>
-                    <p className="text-3xl font-bold text-purple-600">{estatisticas.movimentacoesHoje}</p>
-                  </div>
-                  <div className="p-3 bg-purple-100 rounded-lg">
-                    <TrendingUp className="text-purple-600" size={24} />
-                  </div>
-                </div>
-              </div>
+                );
+              })}
             </div>
 
-            {/* Categorias */}
-            <div className="bg-white rounded-xl shadow-sm p-6">
-              <h3 className="text-lg font-bold text-slate-800 mb-4">Materiais por Categoria</h3>
+            <div className="bg-gradient-to-br from-slate-800/90 to-slate-900/90 rounded-2xl shadow-2xl p-8 border-2 border-slate-700/50">
+              <h3 className="text-2xl font-black text-slate-200 mb-6 flex items-center gap-3">
+                <div className="p-2 bg-blue-500/20 rounded-lg ring-2 ring-blue-400/30">
+                  <Filter className="text-blue-400" size={28} />
+                </div>
+                Materiais por Categoria
+              </h3>
               <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                 {estatisticas.categorias.map((cat, idx) => (
-                  <div key={idx} className="flex items-center justify-between p-4 bg-slate-50 rounded-lg">
-                    <span className="font-medium text-slate-700">{cat.nome}</span>
-                    <span className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-sm font-bold">
+                  <div key={idx} className="flex items-center justify-between p-5 bg-gradient-to-br from-slate-700/50 to-slate-800/50 rounded-xl border-2 border-slate-600/40 hover:border-blue-500/60 transition-all duration-300 hover:scale-105 shadow-lg hover:shadow-blue-500/20">
+                    <span className="font-bold text-slate-200 text-lg">{cat.nome}</span>
+                    <span className="px-5 py-2 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-full text-base font-black ring-4 ring-blue-400/30 shadow-lg">
                       {cat.total}
                     </span>
                   </div>
@@ -500,61 +477,69 @@ export default function App() {
           </div>
         )}
 
-        {/* Movimentações Tab */}
-        {activeTab === "movimentacoes" && (
-          <div className="bg-white rounded-xl shadow-sm">
-            <div className="p-6 border-b">
-              <h2 className="text-xl font-bold text-slate-800">Histórico de Movimentações</h2>
+        {activeTab === "movimentacoes" && !loading && (
+          <div className="bg-gradient-to-br from-slate-800/90 to-slate-900/90 rounded-2xl shadow-2xl border-2 border-slate-700/50">
+            <div className="p-8 border-b-2 border-slate-700/50 bg-gradient-to-r from-slate-800/50 to-slate-900/50">
+              <h2 className="text-3xl font-black text-slate-200 flex items-center gap-3">
+                <div className="p-3 bg-blue-500/20 rounded-xl ring-2 ring-blue-400/30">
+                  <History className="text-blue-400" size={32} />
+                </div>
+                Histórico de Movimentações
+              </h2>
             </div>
-            <div className="p-6">
+            <div className="p-8">
               {movimentacoes.length === 0 ? (
-                <div className="text-center py-12">
-                  <History className="mx-auto text-slate-300 mb-4" size={64} />
-                  <p className="text-slate-600">Nenhuma movimentação registrada</p>
+                <div className="text-center py-20">
+                  <History className="mx-auto text-slate-600 mb-6" size={80} />
+                  <p className="text-slate-400 text-2xl font-bold">Nenhuma movimentação registrada</p>
                 </div>
               ) : (
-                <div className="space-y-3">
+                <div className="space-y-4">
                   {movimentacoes.map((mov) => (
-                    <div key={mov.id} className="flex items-center justify-between p-4 bg-slate-50 rounded-lg hover:bg-slate-100 transition-colors">
-                      <div className="flex items-center gap-4 flex-1">
-                        <div className={`p-2 rounded-lg ${
-                          mov.tipo === "entrada" ? "bg-green-100" : "bg-red-100"
+                    <div key={mov.id} className="flex items-center justify-between p-6 bg-gradient-to-r from-slate-700/40 to-slate-800/40 rounded-2xl hover:from-slate-700/60 hover:to-slate-800/60 transition-all duration-300 border-2 border-slate-600/40 hover:border-slate-500/70 shadow-lg hover:scale-[1.02]">
+                      <div className="flex items-center gap-5 flex-1">
+                        <div className={`p-4 rounded-2xl ring-4 shadow-xl ${
+                          mov.tipo === "entrada" 
+                            ? "bg-gradient-to-br from-emerald-500 to-emerald-600 ring-emerald-400/40 shadow-emerald-500/30" 
+                            : "bg-gradient-to-br from-red-500 to-red-600 ring-red-400/40 shadow-red-500/30"
                         }`}>
                           {mov.tipo === "entrada" ? (
-                            <TrendingUp className={mov.tipo === "entrada" ? "text-green-600" : "text-red-600"} size={20} />
+                            <TrendingUp className="text-white" size={28} />
                           ) : (
-                            <TrendingDown className="text-red-600" size={20} />
+                            <TrendingDown className="text-white" size={28} />
                           )}
                         </div>
                         <div className="flex-1">
-                          <div className="flex items-center gap-2">
-                            <p className="font-semibold text-slate-800">{mov.material.nome}</p>
-                            <span className="text-sm text-slate-500">
-                              {mov.material.categoria && `• ${mov.material.categoria}`}
-                            </span>
+                          <div className="flex items-center gap-3 mb-2">
+                            <p className="font-black text-slate-100 text-xl">{mov.material.nome}</p>
+                            {mov.material.categoria && (
+                              <span className="text-sm text-slate-300 px-4 py-1.5 bg-slate-600/50 rounded-full font-semibold border border-slate-500/50">
+                                {mov.material.categoria}
+                              </span>
+                            )}
                           </div>
-                          <div className="flex items-center gap-4 text-sm text-slate-600 mt-1">
-                            <span className="flex items-center gap-1">
-                              <Users size={14} />
+                          <div className="flex items-center gap-6 text-sm text-slate-400 font-medium">
+                            <span className="flex items-center gap-2">
+                              <Users size={18} />
                               {mov.tecnico}
                             </span>
-                            <span className="flex items-center gap-1">
-                              <Calendar size={14} />
+                            <span className="flex items-center gap-2">
+                              <Calendar size={18} />
                               {formatDate(mov.dataHora)}
                             </span>
                           </div>
                           {mov.observacao && (
-                            <p className="text-sm text-slate-500 mt-1 italic">{mov.observacao}</p>
+                            <p className="text-sm text-slate-400 mt-3 italic bg-slate-900/60 p-3 rounded-lg border border-slate-700/50">{mov.observacao}</p>
                           )}
                         </div>
                       </div>
                       <div className="text-right">
-                        <p className={`text-lg font-bold ${
-                          mov.tipo === "entrada" ? "text-green-600" : "text-red-600"
-                        }`}>
-                          {mov.tipo === "entrada" ? "+" : "-"}{mov.quantidade} un
+                        <p className={`text-3xl font-black ${
+                          mov.tipo === "entrada" ? "text-emerald-400" : "text-red-400"
+                        } drop-shadow-lg`}>
+                          {mov.tipo === "entrada" ? "+" : "-"}{mov.quantidade}
                         </p>
-                        <p className="text-xs text-slate-500">
+                        <p className="text-xs text-slate-500 mt-2 font-bold">
                           {mov.quantidadeAnterior} → {mov.quantidadeAtual}
                         </p>
                       </div>
@@ -566,21 +551,19 @@ export default function App() {
           </div>
         )}
 
-        {/* Estoque Tab */}
-        {activeTab === "estoque" && (
+        {activeTab === "estoque" && !loading && (
           <>
-            {/* Toolbar */}
-            <div className="bg-white rounded-xl shadow-sm p-6 mb-6">
-              <div className="flex gap-4 flex-wrap items-center mb-4">
+            <div className="bg-gradient-to-br from-slate-800/90 to-slate-900/90 rounded-2xl shadow-2xl p-6 mb-6 border-2 border-slate-700/50">
+              <div className="flex gap-4 flex-wrap items-center mb-6">
                 <div className="flex-1 min-w-64">
                   <div className="relative">
-                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400" size={20} />
+                    <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-slate-400" size={22} />
                     <input
                       type="text"
-                      placeholder="Buscar materiais..."
+                      placeholder="Buscar por nome, localização ou descrição..."
                       value={searchTerm}
                       onChange={(e) => setSearchTerm(e.target.value)}
-                      className="w-full pl-10 pr-4 py-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+                      className="w-full pl-14 pr-4 py-4 bg-slate-700/60 border-2 border-slate-600/50 rounded-xl focus:ring-4 focus:ring-blue-500/30 focus:border-blue-500/50 outline-none text-slate-200 placeholder-slate-400 transition-all font-medium text-base"
                     />
                   </div>
                 </div>
@@ -591,19 +574,19 @@ export default function App() {
                     setErrors({});
                     setShowModal(true);
                   }}
-                  className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium transition-colors shadow-sm"
+                  className="flex items-center gap-2 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white px-7 py-4 rounded-xl font-bold transition-all shadow-xl shadow-blue-500/40 hover:shadow-blue-500/60 hover:scale-105 border border-blue-400/30"
                 >
-                  <Plus size={20} />
+                  <Plus size={22} />
                   Novo Material
                 </button>
               </div>
 
-              {/* Filtros */}
+              {/* filtros */}
               <div className="flex gap-3 flex-wrap">
                 <select
                   value={filtroCategoria}
                   onChange={(e) => setFiltroCategoria(e.target.value)}
-                  className="px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                  className="px-4 py-2 bg-slate-800/60 border border-slate-600/50 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-slate-200 transition-all"
                 >
                   <option value="">Todas categorias</option>
                   {categorias.map(cat => (
@@ -614,7 +597,7 @@ export default function App() {
                 <select
                   value={filtroStatus}
                   onChange={(e) => setFiltroStatus(e.target.value)}
-                  className="px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                  className="px-4 py-2 bg-slate-800/60 border border-slate-600/50 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-slate-200 transition-all"
                 >
                   <option value="ativos">Ativos</option>
                   <option value="baixoEstoque">Baixo Estoque</option>
@@ -629,20 +612,19 @@ export default function App() {
                     setFiltroCategoria("");
                     setFiltroStatus("ativos");
                   }}
-                  className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+                  className="px-4 py-2 text-slate-300 hover:bg-slate-700/50 rounded-xl transition-all border border-slate-600/30"
                 >
                   Limpar filtros
                 </button>
               </div>
             </div>
 
-            {/* Lista de Materiais */}
             <div className="grid gap-4">
               {filteredMateriais.length === 0 ? (
-                <div className="bg-white rounded-xl shadow-sm p-12 text-center">
-                  <Package className="mx-auto text-slate-300 mb-4" size={64} />
-                  <h3 className="text-xl font-semibold text-slate-600 mb-2">Nenhum material encontrado</h3>
-                  <p className="text-slate-500">Ajuste os filtros ou adicione novos materiais</p>
+                <div className="bg-gradient-to-br from-slate-800/90 to-slate-900/90 rounded-2xl shadow-2xl p-12 text-center border-2 border-slate-700/50">
+                  <Package className="mx-auto text-slate-500 mb-4" size={72} />
+                  <h3 className="text-2xl font-bold text-slate-200 mb-2">Nenhum material encontrado</h3>
+                  <p className="text-slate-400">Ajuste os filtros ou adicione novos materiais</p>
                 </div>
               ) : (
                 filteredMateriais.map((material) => {
@@ -650,45 +632,46 @@ export default function App() {
                   const StatusIcon = status.icon;
 
                   return (
-                    <div key={material.id} className={`bg-white rounded-xl shadow-sm p-6 hover:shadow-md transition-all border-l-4 ${
-                      !material.ativo ? "border-gray-400" :
-                      material.quantidade === 0 ? "border-red-500" :
-                      material.quantidade <= material.estoqueMinimo ? "border-yellow-500" :
-                      "border-green-500"
+                    <div key={material.id} className={`bg-gradient-to-br from-slate-800/90 to-slate-900/90 rounded-2xl shadow-2xl p-6 hover:shadow-xl transition-all border-2 ${
+                      !material.ativo ? "border-slate-600" :
+                      material.quantidade === 0 ? "border-red-600" :
+                      material.quantidade <= material.estoqueMinimo ? "border-amber-500" :
+                      "border-emerald-500"
                     }`}>
                       <div className="flex items-start justify-between gap-4">
                         <div className="flex-1">
                           <div className="flex items-center gap-3 mb-2 flex-wrap">
-                            <h3 className="text-xl font-semibold text-slate-800">{material.nome}</h3>
+                            <h3 className="text-2xl font-black text-slate-100">{material.nome}</h3>
                             
-                            <span className={`px-3 py-1 rounded-full text-sm font-medium flex items-center gap-1 ${getStatusColor(material)}`}>
+                            <span className={`px-3 py-1 rounded-full text-sm font-medium flex items-center gap-2 ${getStatusColor(material)}`}>
                               <StatusIcon size={14} />
-                              {material.quantidade} un.
+                              <span className="font-semibold">{material.quantidade} un.</span>
                             </span>
 
                             {material.categoria && (
-                              <span className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-sm font-medium">
+                              <span className="px-3 py-1 bg-slate-700/50 text-slate-200 rounded-full text-sm font-medium flex items-center gap-2">
+                                <Box size={14} />
                                 {material.categoria}
                               </span>
                             )}
                           </div>
                           
-                          <p className="text-slate-600 mb-3">{material.descricao}</p>
+                          <p className="text-slate-300 mb-3">{material.descricao}</p>
                           
-                          <div className="flex items-center gap-4 text-sm text-slate-500 flex-wrap">
+                          <div className="flex items-center gap-4 text-sm text-slate-400 flex-wrap">
                             <span className="flex items-center gap-1">
-                              <Package size={16} />
+                              <MapPin size={16} />
                               {material.localizacao}
                             </span>
-                            <span>Estoque mínimo: {material.estoqueMinimo}</span>
-                            <span>Última atualização: {formatDate(material.atualizadoEm)}</span>
+                            <span>Estoque mínimo: <strong className="text-slate-200">{material.estoqueMinimo}</strong></span>
+                            <span>Última atualização: <strong className="text-slate-200">{formatDate(material.atualizadoEm)}</strong></span>
                           </div>
                         </div>
                         
-                        <div className="flex gap-2">
+                        <div className="flex gap-2 items-start">
                           <button
                             onClick={() => abrirHistorico(material)}
-                            className="p-2 text-purple-600 hover:bg-purple-50 rounded-lg transition-colors"
+                            className="p-2 text-purple-400 hover:bg-purple-800/30 rounded-lg transition-colors"
                             title="Ver histórico"
                           >
                             <History size={20} />
@@ -701,7 +684,7 @@ export default function App() {
                                 setErrors({});
                                 setShowMovimentacaoModal(true);
                               }}
-                              className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                              className="p-2 text-emerald-400 hover:bg-emerald-800/20 rounded-lg transition-colors"
                               title="Registrar movimentação"
                             >
                               <TrendingUp size={20} />
@@ -720,14 +703,14 @@ export default function App() {
                               setEditingId(material.id);
                               setShowModal(true);
                             }}
-                            className="p-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+                            className="p-2 text-slate-200 hover:bg-slate-800/40 rounded-lg transition-colors"
                             title="Editar"
                           >
                             <Edit2 size={20} />
                           </button>
                           <button
                             onClick={() => deletarMaterial(material.id)}
-                            className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                            className="p-2 text-red-500 hover:bg-red-800/20 rounded-lg transition-colors"
                             title="Desativar"
                           >
                             <Trash2 size={20} />
@@ -745,57 +728,57 @@ export default function App() {
 
       {/* Modais - Material */}
       {showModal && (
-        <div className="fixed inset-0 bg-black/30 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl p-6">
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+          <div className="bg-slate-900 rounded-2xl shadow-2xl w-full max-w-2xl p-6 border-2 border-slate-700/60">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-bold">{editingId ? 'Editar Material' : 'Novo Material'}</h3>
-              <button onClick={() => { setShowModal(false); setEditingId(null); setErrors({}); }} className="p-2 rounded-full hover:bg-slate-100">
-                <X />
+              <h3 className="text-lg font-bold text-slate-100">{editingId ? 'Editar Material' : 'Novo Material'}</h3>
+              <button onClick={() => { setShowModal(false); setEditingId(null); setErrors({}); }} className="p-2 rounded-full hover:bg-slate-800/60">
+                <X className="text-slate-200" />
               </button>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-slate-700">Nome</label>
-                <input value={novoMaterial.nome} onChange={(e) => setNovoMaterial(prev => ({...prev, nome: e.target.value}))} className={`mt-1 w-full px-3 py-2 border rounded-lg outline-none ${errors.nome ? 'border-red-400' : 'border-slate-200'}`} />
-                {errors.nome && <p className="text-xs text-red-500 mt-1">{errors.nome}</p>}
+                <label className="block text-sm font-medium text-slate-300">Nome</label>
+                <input value={novoMaterial.nome} onChange={(e) => setNovoMaterial(prev => ({...prev, nome: e.target.value}))} className={`mt-1 w-full px-3 py-2 border rounded-lg outline-none ${errors.nome ? 'border-red-500' : 'border-slate-700 bg-slate-800/50'} text-slate-100`} />
+                {errors.nome && <p className="text-xs text-red-400 mt-1">{errors.nome}</p>}
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-700">Categoria</label>
-                <select value={novoMaterial.categoria} onChange={(e) => setNovoMaterial(prev => ({...prev, categoria: e.target.value}))} className="mt-1 w-full px-3 py-2 border rounded-lg outline-none border-slate-200">
+                <label className="block text-sm font-medium text-slate-300">Categoria</label>
+                <select value={novoMaterial.categoria} onChange={(e) => setNovoMaterial(prev => ({...prev, categoria: e.target.value}))} className="mt-1 w-full px-3 py-2 border rounded-lg outline-none border-slate-700 bg-slate-800/50 text-slate-100">
                   <option value="">Selecione</option>
                   {categorias.map(c => <option key={c} value={c}>{c}</option>)}
                 </select>
               </div>
 
               <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-slate-700">Descrição</label>
-                <textarea value={novoMaterial.descricao} onChange={(e) => setNovoMaterial(prev => ({...prev, descricao: e.target.value}))} className={`mt-1 w-full px-3 py-2 border rounded-lg outline-none ${errors.descricao ? 'border-red-400' : 'border-slate-200'}`} rows={3} />
-                {errors.descricao && <p className="text-xs text-red-500 mt-1">{errors.descricao}</p>}
+                <label className="block text-sm font-medium text-slate-300">Descrição</label>
+                <textarea value={novoMaterial.descricao} onChange={(e) => setNovoMaterial(prev => ({...prev, descricao: e.target.value}))} className={`mt-1 w-full px-3 py-2 border rounded-lg outline-none ${errors.descricao ? 'border-red-500' : 'border-slate-700 bg-slate-800/50'} text-slate-100`} rows={3} />
+                {errors.descricao && <p className="text-xs text-red-400 mt-1">{errors.descricao}</p>}
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-700">Quantidade</label>
-                <input type="number" value={novoMaterial.quantidade} onChange={(e) => setNovoMaterial(prev => ({...prev, quantidade: Number(e.target.value)}))} className={`mt-1 w-full px-3 py-2 border rounded-lg outline-none ${errors.quantidade ? 'border-red-400' : 'border-slate-200'}`} />
-                {errors.quantidade && <p className="text-xs text-red-500 mt-1">{errors.quantidade}</p>}
+                <label className="block text-sm font-medium text-slate-300">Quantidade</label>
+                <input type="number" value={novoMaterial.quantidade} onChange={(e) => setNovoMaterial(prev => ({...prev, quantidade: Number(e.target.value)}))} className={`mt-1 w-full px-3 py-2 border rounded-lg outline-none ${errors.quantidade ? 'border-red-500' : 'border-slate-700 bg-slate-800/50'} text-slate-100`} />
+                {errors.quantidade && <p className="text-xs text-red-400 mt-1">{errors.quantidade}</p>}
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-700">Estoque Mínimo</label>
-                <input type="number" value={novoMaterial.estoqueMinimo} onChange={(e) => setNovoMaterial(prev => ({...prev, estoqueMinimo: Number(e.target.value)}))} className={`mt-1 w-full px-3 py-2 border rounded-lg outline-none ${errors.estoqueMinimo ? 'border-red-400' : 'border-slate-200'}`} />
-                {errors.estoqueMinimo && <p className="text-xs text-red-500 mt-1">{errors.estoqueMinimo}</p>}
+                <label className="block text-sm font-medium text-slate-300">Estoque Mínimo</label>
+                <input type="number" value={novoMaterial.estoqueMinimo} onChange={(e) => setNovoMaterial(prev => ({...prev, estoqueMinimo: Number(e.target.value)}))} className={`mt-1 w-full px-3 py-2 border rounded-lg outline-none ${errors.estoqueMinimo ? 'border-red-500' : 'border-slate-700 bg-slate-800/50'} text-slate-100`} />
+                {errors.estoqueMinimo && <p className="text-xs text-red-400 mt-1">{errors.estoqueMinimo}</p>}
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-700">Localização</label>
-                <input value={novoMaterial.localizacao} onChange={(e) => setNovoMaterial(prev => ({...prev, localizacao: e.target.value}))} className={`mt-1 w-full px-3 py-2 border rounded-lg outline-none ${errors.localizacao ? 'border-red-400' : 'border-slate-200'}`} />
-                {errors.localizacao && <p className="text-xs text-red-500 mt-1">{errors.localizacao}</p>}
+                <label className="block text-sm font-medium text-slate-300">Localização</label>
+                <input value={novoMaterial.localizacao} onChange={(e) => setNovoMaterial(prev => ({...prev, localizacao: e.target.value}))} className={`mt-1 w-full px-3 py-2 border rounded-lg outline-none ${errors.localizacao ? 'border-red-500' : 'border-slate-700 bg-slate-800/50'} text-slate-100`} />
+                {errors.localizacao && <p className="text-xs text-red-400 mt-1">{errors.localizacao}</p>}
               </div>
             </div>
 
             <div className="flex items-center justify-end gap-3 mt-6">
-              <button onClick={() => { setShowModal(false); setErrors({}); }} className="px-4 py-2 rounded-lg hover:bg-slate-100">Cancelar</button>
+              <button onClick={() => { setShowModal(false); setErrors({}); }} className="px-4 py-2 rounded-lg hover:bg-slate-800/60 text-slate-200">Cancelar</button>
               {editingId ? (
                 <button onClick={atualizarMaterial} disabled={isSubmitting} className="px-4 py-2 bg-blue-600 text-white rounded-lg flex items-center gap-2">
                   {isSubmitting ? <Loader2 className="animate-spin" size={16} /> : <Save size={16} />} Salvar alterações
@@ -812,48 +795,48 @@ export default function App() {
 
       {/* Modal Movimentação */}
       {showMovimentacaoModal && materialSelecionado && (
-        <div className="fixed inset-0 bg-black/30 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-lg p-6">
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+          <div className="bg-slate-900 rounded-2xl shadow-2xl w-full max-w-lg p-6 border-2 border-slate-700/60">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-bold">Registrar Movimentação - {materialSelecionado.nome}</h3>
-              <button onClick={() => { setShowMovimentacaoModal(false); setMaterialSelecionado(null); setErrors({}); }} className="p-2 rounded-full hover:bg-slate-100">
-                <X />
+              <h3 className="text-lg font-bold text-slate-100">Registrar Movimentação - {materialSelecionado.nome}</h3>
+              <button onClick={() => { setShowMovimentacaoModal(false); setMaterialSelecionado(null); setErrors({}); }} className="p-2 rounded-full hover:bg-slate-800/60">
+                <X className="text-slate-200" />
               </button>
             </div>
 
             <div className="grid grid-cols-1 gap-4">
-              <div className="flex gap-2">
-                <label className="flex items-center gap-2">
+              <div className="flex gap-4 items-center">
+                <label className="flex items-center gap-2 text-slate-200">
                   <input type="radio" name="tipo" checked={movimentacao.tipo === 'saida'} onChange={() => setMovimentacao(prev => ({...prev, tipo: 'saida'}))} />
                   Saída
                 </label>
-                <label className="flex items-center gap-2">
+                <label className="flex items-center gap-2 text-slate-200">
                   <input type="radio" name="tipo" checked={movimentacao.tipo === 'entrada'} onChange={() => setMovimentacao(prev => ({...prev, tipo: 'entrada'}))} />
                   Entrada
                 </label>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-700">Quantidade</label>
-                <input type="number" value={movimentacao.quantidade} onChange={(e) => setMovimentacao(prev => ({...prev, quantidade: Number(e.target.value)}))} className={`mt-1 w-full px-3 py-2 border rounded-lg outline-none ${errors.quantidade ? 'border-red-400' : 'border-slate-200'}`} />
-                {errors.quantidade && <p className="text-xs text-red-500 mt-1">{errors.quantidade}</p>}
+                <label className="block text-sm font-medium text-slate-300">Quantidade</label>
+                <input type="number" value={movimentacao.quantidade} onChange={(e) => setMovimentacao(prev => ({...prev, quantidade: Number(e.target.value)}))} className={`mt-1 w-full px-3 py-2 border rounded-lg outline-none ${errors.quantidade ? 'border-red-500' : 'border-slate-700 bg-slate-800/50'} text-slate-100`} />
+                {errors.quantidade && <p className="text-xs text-red-400 mt-1">{errors.quantidade}</p>}
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-700">Técnico</label>
-                <input value={movimentacao.tecnico} onChange={(e) => setMovimentacao(prev => ({...prev, tecnico: e.target.value}))} className={`mt-1 w-full px-3 py-2 border rounded-lg outline-none ${errors.tecnico ? 'border-red-400' : 'border-slate-200'}`} />
-                {errors.tecnico && <p className="text-xs text-red-500 mt-1">{errors.tecnico}</p>}
+                <label className="block text-sm font-medium text-slate-300">Técnico</label>
+                <input value={movimentacao.tecnico} onChange={(e) => setMovimentacao(prev => ({...prev, tecnico: e.target.value}))} className={`mt-1 w-full px-3 py-2 border rounded-lg outline-none ${errors.tecnico ? 'border-red-500' : 'border-slate-700 bg-slate-800/50'} text-slate-100`} />
+                {errors.tecnico && <p className="text-xs text-red-400 mt-1">{errors.tecnico}</p>}
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-700">Observação</label>
-                <textarea value={movimentacao.observacao} onChange={(e) => setMovimentacao(prev => ({...prev, observacao: e.target.value}))} className="mt-1 w-full px-3 py-2 border rounded-lg outline-none border-slate-200" rows={3} />
+                <label className="block text-sm font-medium text-slate-300">Observação</label>
+                <textarea value={movimentacao.observacao} onChange={(e) => setMovimentacao(prev => ({...prev, observacao: e.target.value}))} className="mt-1 w-full px-3 py-2 border rounded-lg outline-none border-slate-700 bg-slate-800/50 text-slate-100" rows={3} />
               </div>
             </div>
 
             <div className="flex items-center justify-end gap-3 mt-6">
-              <button onClick={() => { setShowMovimentacaoModal(false); setMaterialSelecionado(null); setErrors({}); }} className="px-4 py-2 rounded-lg hover:bg-slate-100">Cancelar</button>
-              <button onClick={processarMovimentacao} disabled={isSubmitting} className="px-4 py-2 bg-blue-600 text-white rounded-lg flex items-center gap-2">
+              <button onClick={() => { setShowMovimentacaoModal(false); setMaterialSelecionado(null); setErrors({}); }} className="px-4 py-2 rounded-lg hover:bg-slate-800/60 text-slate-200">Cancelar</button>
+              <button onClick={processarMovimentacao} disabled={isSubmitting} className="px-4 py-2 bg-emerald-600 text-white rounded-lg flex items-center gap-2">
                 {isSubmitting ? <Loader2 className="animate-spin" size={16} /> : <Save size={16} />} Registrar
               </button>
             </div>
@@ -861,41 +844,53 @@ export default function App() {
         </div>
       )}
 
-      {/* Modal Historico */}
+      {/* Modal Histórico */}
       {showHistoricoModal && materialSelecionado && (
-        <div className="fixed inset-0 bg-black/30 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-3xl p-6">
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+          <div className="bg-slate-900 rounded-2xl shadow-2xl w-full max-w-3xl p-6 border-2 border-slate-700/60">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-bold">Histórico - {materialSelecionado.nome}</h3>
-              <button onClick={() => { setShowHistoricoModal(false); setMaterialSelecionado(null); }} className="p-2 rounded-full hover:bg-slate-100">
-                <X />
+              <h3 className="text-lg font-bold text-slate-100">Histórico - {materialSelecionado.nome}</h3>
+              <button onClick={() => { setShowHistoricoModal(false); setMaterialSelecionado(null); }} className="p-2 rounded-full hover:bg-slate-800/60">
+                <X className="text-slate-200" />
               </button>
             </div>
 
             <div className="space-y-3 max-h-96 overflow-auto">
               {materialSelecionado.movimentacoes && materialSelecionado.movimentacoes.length > 0 ? (
                 materialSelecionado.movimentacoes.map(mov => (
-                  <div key={mov.id} className="p-3 bg-slate-50 rounded-lg flex items-start gap-3">
-                    <div className={`p-2 rounded-md ${mov.tipo === 'entrada' ? 'bg-green-100' : 'bg-red-100'}`}>
-                      {mov.tipo === 'entrada' ? <TrendingUp className="text-green-600" /> : <TrendingDown className="text-red-600" />}
+                  <div key={mov.id} className="p-3 bg-slate-800/50 rounded-lg flex items-start gap-3 border border-slate-700/50">
+                    <div className={`p-2 rounded-md ${mov.tipo === 'entrada' ? 'bg-emerald-600/20' : 'bg-red-600/20'}`}>
+                      {mov.tipo === 'entrada' ? <TrendingUp className="text-emerald-400" /> : <TrendingDown className="text-red-400" />}
                     </div>
                     <div className="flex-1">
                       <div className="flex items-center justify-between">
-                        <div className="text-sm text-slate-700">{mov.tecnico} • {formatDate(mov.dataHora)}</div>
-                        <div className={`font-semibold ${mov.tipo === 'entrada' ? 'text-green-600' : 'text-red-600'}`}>{mov.tipo === 'entrada' ? '+' : '-'}{mov.quantidade} un</div>
+                        <div className="text-sm text-slate-300">{mov.tecnico} • {formatDate(mov.dataHora)}</div>
+                        <div className={`font-semibold ${mov.tipo === 'entrada' ? 'text-emerald-400' : 'text-red-400'}`}>{mov.tipo === 'entrada' ? '+' : '-'}{mov.quantidade} un</div>
                       </div>
-                      {mov.observacao && <div className="text-sm text-slate-500 mt-1">{mov.observacao}</div>}
+                      {mov.observacao && <div className="text-sm text-slate-400 mt-1">{mov.observacao}</div>}
                     </div>
                   </div>
                 ))
               ) : (
-                <div className="text-center py-8 text-slate-500">Nenhuma movimentação encontrada para este material.</div>
+                <div className="text-center py-8 text-slate-400">Nenhuma movimentação encontrada para este material.</div>
               )}
             </div>
 
             <div className="flex items-center justify-end gap-3 mt-6">
-              <CSVLink data={csvData(materialSelecionado.movimentacoes || [])} filename={`historico_${materialSelecionado.id}.csv`} className="px-4 py-2 bg-slate-100 rounded-lg">Exportar CSV</CSVLink>
-              <button onClick={() => { setShowHistoricoModal(false); setMaterialSelecionado(null); }} className="px-4 py-2 rounded-lg hover:bg-slate-100">Fechar</button>
+              <button onClick={() => { 
+                // export histórico em CSV simples
+                const rows = (materialSelecionado.movimentacoes || []).map(m => [
+                  m.id, m.tipo, m.quantidade, m.tecnico, m.observacao || "", formatDate(m.dataHora)
+                ]);
+                let csv = "ID,Tipo,Quantidade,Técnico,Observação,DataHora\n";
+                rows.forEach(r => csv += r.map(c => `"${String(c).replace(/"/g,'""')}"`).join(",") + "\n");
+                const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+                const l = document.createElement("a");
+                l.href = URL.createObjectURL(blob);
+                l.download = `historico_${materialSelecionado.id}.csv`;
+                l.click();
+              }} className="px-4 py-2 bg-slate-700 text-white rounded-lg">Exportar CSV</button>
+              <button onClick={() => { setShowHistoricoModal(false); setMaterialSelecionado(null); }} className="px-4 py-2 rounded-lg hover:bg-slate-800/60 text-slate-200">Fechar</button>
             </div>
           </div>
         </div>
@@ -903,27 +898,29 @@ export default function App() {
 
       {/* Modal Relatório (filtro) */}
       {showRelatorioModal && (
-        <div className="fixed inset-0 bg-black/30 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-lg p-6">
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+          <div className="bg-slate-900 rounded-2xl shadow-2xl w-full max-w-lg p-6 border-2 border-slate-700/60">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-bold">Gerar Relatório de Movimentações</h3>
-              <button onClick={() => setShowRelatorioModal(false)} className="p-2 rounded-full hover:bg-slate-100"><X /></button>
+              <h3 className="text-lg font-bold text-slate-100">Gerar Relatório de Movimentações</h3>
+              <button onClick={() => setShowRelatorioModal(false)} className="p-2 rounded-full hover:bg-slate-800/60">
+                <X className="text-slate-200" />
+              </button>
             </div>
 
             <div className="grid grid-cols-1 gap-4">
               <div>
-                <label className="block text-sm font-medium text-slate-700">Data início</label>
-                <input type="date" value={filtroRelatorio.dataInicio} onChange={(e) => setFiltroRelatorio(prev => ({...prev, dataInicio: e.target.value}))} className="mt-1 w-full px-3 py-2 border rounded-lg outline-none border-slate-200" />
+                <label className="block text-sm font-medium text-slate-300">Data início</label>
+                <input type="date" value={filtroRelatorio.dataInicio} onChange={(e) => setFiltroRelatorio(prev => ({...prev, dataInicio: e.target.value}))} className="mt-1 w-full px-3 py-2 border rounded-lg outline-none border-slate-700 bg-slate-800/50 text-slate-100" />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-700">Data fim</label>
-                <input type="date" value={filtroRelatorio.dataFim} onChange={(e) => setFiltroRelatorio(prev => ({...prev, dataFim: e.target.value}))} className="mt-1 w-full px-3 py-2 border rounded-lg outline-none border-slate-200" />
+                <label className="block text-sm font-medium text-slate-300">Data fim</label>
+                <input type="date" value={filtroRelatorio.dataFim} onChange={(e) => setFiltroRelatorio(prev => ({...prev, dataFim: e.target.value}))} className="mt-1 w-full px-3 py-2 border rounded-lg outline-none border-slate-700 bg-slate-800/50 text-slate-100" />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-700">Tipo</label>
-                <select value={filtroRelatorio.tipo} onChange={(e) => setFiltroRelatorio(prev => ({...prev, tipo: e.target.value}))} className="mt-1 w-full px-3 py-2 border rounded-lg outline-none border-slate-200">
+                <label className="block text-sm font-medium text-slate-300">Tipo</label>
+                <select value={filtroRelatorio.tipo} onChange={(e) => setFiltroRelatorio(prev => ({...prev, tipo: e.target.value}))} className="mt-1 w-full px-3 py-2 border rounded-lg outline-none border-slate-700 bg-slate-800/50 text-slate-100">
                   <option value="">Todos</option>
                   <option value="entrada">Entradas</option>
                   <option value="saida">Saídas</option>
@@ -932,8 +929,41 @@ export default function App() {
             </div>
 
             <div className="flex items-center justify-end gap-3 mt-6">
-              <button onClick={() => setShowRelatorioModal(false)} className="px-4 py-2 rounded-lg hover:bg-slate-100">Cancelar</button>
-              <button onClick={gerarRelatorio} className="px-4 py-2 bg-purple-600 text-white rounded-lg">Gerar</button>
+              <button onClick={() => setShowRelatorioModal(false)} className="px-4 py-2 rounded-lg hover:bg-slate-800/60 text-slate-200">Cancelar</button>
+              <button onClick={async () => {
+                // Gerar relatório chamando endpoint e depois baixar CSV
+                try {
+                  const params = new URLSearchParams();
+                  if (filtroRelatorio.dataInicio) params.append('dataInicio', filtroRelatorio.dataInicio);
+                  if (filtroRelatorio.dataFim) params.append('dataFim', filtroRelatorio.dataFim);
+                  if (filtroRelatorio.tipo) params.append('tipo', filtroRelatorio.tipo);
+
+                  const res = await fetch(`http://localhost:3001/relatorios/movimentacoes?${params}`);
+                  const data = await res.json();
+                  // transform to csv
+                  let csv = "ID,Material,Tipo,Quantidade,Técnico,Observação,DataHora\n";
+                  (data || []).forEach(r => {
+                    csv += [
+                      r.id,
+                      r.material?.nome || "",
+                      r.tipo,
+                      r.quantidade,
+                      r.tecnico || "",
+                      (r.observacao || "").replace(/"/g,'""'),
+                      formatDate(r.dataHora)
+                    ].map(c => `"${String(c).replace(/"/g,'""')}"`).join(",") + "\n";
+                  });
+                  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+                  const l = document.createElement("a");
+                  l.href = URL.createObjectURL(blob);
+                  l.download = `relatorio_movimentacoes_${new Date().toISOString().split('T')[0]}.csv`;
+                  l.click();
+                  setShowRelatorioModal(false);
+                  showAlert("Relatório gerado com sucesso! Baixe o CSV.", "success");
+                } catch (err) {
+                  showAlert("Erro ao gerar relatório", "error");
+                }
+              }} className="px-4 py-2 bg-purple-600 text-white rounded-lg">Gerar</button>
             </div>
           </div>
         </div>
