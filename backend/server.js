@@ -104,6 +104,99 @@ app.patch("/materiais/:id/status", async (req, res) => {
   }
 });
 
+// ✅ Deletar material (desativar)
+app.delete("/materiais/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const material = await prisma.material.update({
+      where: { id: Number(id) },
+      data: { ativo: false },
+    });
+
+    res.json(material);
+  } catch (error) {
+    res.status(500).json({ error: "Erro ao desativar material." });
+  }
+});
+
+// ✅ Estatísticas gerais
+app.get("/estatisticas", async (req, res) => {
+  try {
+    const totalMateriais = await prisma.material.count();
+    const materiaisAtivos = await prisma.material.count({ where: { ativo: true } });
+
+    const materiais = await prisma.material.findMany({ where: { ativo: true } });
+    const materiaisBaixoEstoque = materiais.filter(m => m.quantidade <= m.estoqueMinimo).length;
+
+    const hoje = new Date();
+    hoje.setHours(0, 0, 0, 0);
+    const movimentacoesHoje = await prisma.movimentacao.count({
+      where: {
+        dataHora: {
+          gte: hoje
+        }
+      }
+    });
+
+    const categorias = await prisma.material.groupBy({
+      by: ['categoria'],
+      _count: true,
+      where: { ativo: true }
+    });
+
+    const categoriasFormatadas = categorias.map(c => ({
+      nome: c.categoria || 'Sem categoria',
+      total: c._count
+    }));
+
+    res.json({
+      totalMateriais,
+      materiaisAtivos,
+      materiaisBaixoEstoque,
+      movimentacoesHoje,
+      categorias: categoriasFormatadas
+    });
+  } catch (error) {
+    res.status(500).json({ error: "Erro ao buscar estatísticas." });
+  }
+});
+
+// ✅ Relatório de movimentações com filtros
+app.get("/relatorios/movimentacoes", async (req, res) => {
+  try {
+    const { dataInicio, dataFim, tipo } = req.query;
+
+    const where = {};
+
+    if (tipo) {
+      where.tipo = tipo;
+    }
+
+    if (dataInicio || dataFim) {
+      where.dataHora = {};
+      if (dataInicio) {
+        where.dataHora.gte = new Date(dataInicio);
+      }
+      if (dataFim) {
+        const fim = new Date(dataFim);
+        fim.setHours(23, 59, 59, 999);
+        where.dataHora.lte = fim;
+      }
+    }
+
+    const movimentacoes = await prisma.movimentacao.findMany({
+      where,
+      orderBy: { dataHora: 'desc' },
+      include: { material: true }
+    });
+
+    res.json(movimentacoes);
+  } catch (error) {
+    res.status(500).json({ error: "Erro ao gerar relatório." });
+  }
+});
+
 // ✅ Registrar movimentação (entrada/saída)
 app.post("/movimentacoes", async (req, res) => {
   try {
