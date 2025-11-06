@@ -1,11 +1,20 @@
 import express from "express";
 import { PrismaClient } from "@prisma/client";
 import cors from "cors";
+import { AuthController } from "./src/controllers/AuthController.js";
+import { authMiddleware } from "./src/middlewares/auth.js";
 
 const prisma = new PrismaClient();
 const app = express();
 app.use(express.json());
 app.use(cors());
+
+// Rotas de autenticação (públicas)
+app.post("/auth/login", AuthController.login);
+app.post("/auth/register", AuthController.register);
+
+// Middleware de autenticação para rotas protegidas
+app.use(authMiddleware);
 
 // ✅ Listar todos os materiais
 app.get("/materiais", async (req, res) => {

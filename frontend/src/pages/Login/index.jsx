@@ -1,17 +1,35 @@
-import React, { useState } from 'react';
-import { Package, User, KeyRound } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Package, User, KeyRound, AlertCircle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../../hooks/useAuth';
 
 export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+  const { login, user } = useAuth();
 
-  const handleSubmit = (e) => {
+  useEffect(() => {
+    if (user) {
+      navigate('/dashboard');
+    }
+  }, [user, navigate]);
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    // TODO: Implementar autenticação
-    // Por enquanto, apenas redireciona para o dashboard
-    navigate('/dashboard');
+    setError('');
+    setLoading(true);
+
+    try {
+      await login(email, password);
+      navigate('/dashboard');
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -106,12 +124,26 @@ export default function Login() {
                 </div>
               </div>
 
+              {error && (
+                <div className="mb-4 p-3 rounded bg-red-50 border border-red-200">
+                  <div className="flex items-center text-red-600">
+                    <AlertCircle className="h-5 w-5 mr-2" />
+                    <span className="text-sm">{error}</span>
+                  </div>
+                </div>
+              )}
+
               <div>
                 <button
                   type="submit"
-                  className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                  disabled={loading}
+                  className={`w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white ${
+                    loading
+                      ? 'bg-blue-400 cursor-not-allowed'
+                      : 'bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500'
+                  }`}
                 >
-                  Entrar
+                  {loading ? 'Entrando...' : 'Entrar'}
                 </button>
               </div>
             </form>
