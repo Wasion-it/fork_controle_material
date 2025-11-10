@@ -1,4 +1,23 @@
+version: '3.8'
+
 services:
+  traefik:
+    image: traefik:v3.0
+    container_name: traefik
+    command:
+      - "--api.dashboard=true"
+      - "--api.insecure=true" # ⚠️ desative em produção
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.web.address=:80"
+    ports:
+      - "80:80"
+      - "8080:8080" # Dashboard Traefik
+    networks:
+      - controle_net
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+
   db:
     image: mysql:8.0
     container_name: controle_db
@@ -21,20 +40,17 @@ services:
       retries: 5
 
   backend:
-    build: ./backend
+    image: controle_material-backend:latest
     container_name: controle_backend
     restart: always
-    ports:
-      - "3001:3001"
     env_file:
       - .env
       - ./backend/.env
-    healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "http://localhost:3001/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 15s
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.backend.rule=Host(`api.estoque.ti.wasion.com.br`)"
+      - "traefik.http.routers.backend.entrypoints=web"
+      - "traefik.http.services.backend.loadbalancer.server.port=3001"
     depends_on:
       db:
         condition: service_healthy
@@ -42,13 +58,16 @@ services:
       - controle_net
 
   frontend:
-    build: ./frontend
+    image: controle_material-frontend:latest
     container_name: controle_frontend
     restart: always
-    ports:
-      - "80:80"
     environment:
-      - VITE_API_URL=http://10.10.99.30:3001
+      - VITE_API_URL=http://api.estoque.ti.wasion.com.br
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.frontend.rule=Host(`estoque.ti.wasion.com.br`)"
+      - "traefik.http.routers.frontend.entrypoints=web"
+      - "traefik.http.services.frontend.loadbalancer.server.port=80"
     depends_on:
       backend:
         condition: service_healthy
