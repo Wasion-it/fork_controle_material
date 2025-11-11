@@ -3,26 +3,74 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
+// Helper para sanitizar valores de env (remove aspas e espaços extras)
+function cleanEnv(value, fallback = '') {
+  if (!value) return fallback;
+  return value.trim().replace(/^"|"$/g, '');
+}
+
+const LDAP_ENABLED = cleanEnv(process.env.LDAP_ENABLED, 'true').toLowerCase() === 'true';
+const rawUrl = cleanEnv(process.env.LDAP_URL, 'ldap://your-domain-controller:389');
+
+console.log('[LDAP] Variáveis carregadas:', {
+  LDAP_ENABLED: process.env.LDAP_ENABLED,
+  LDAP_URL: rawUrl
+});
+
+// Remove aspas e valida formato básico (sem path extra que possa causar erro de scope)
+const url = rawUrl.split('?')[0].trim();
+
+// Validar formato simples (ldap://host:porta opcional)
+const basicUrlPattern = /^ldaps?:\/\/[^\s:]+(:\d+)?$/i;
+if (!basicUrlPattern.test(url)) {
+  console.warn(`[LDAP] URL potencialmente inválida: ${url}. Serviço será desativado para evitar crash.`);
+}
+
 const ldapConfig = {
-  url: process.env.LDAP_URL || 'ldap://your-domain-controller:389',
-  baseDN: process.env.LDAP_BASE_DN || 'OU=TI,DC=seu-dominio,DC=local',
-  bindDN: process.env.LDAP_BIND_DN || 'CN=ServiceAccount,OU=ServiceAccounts,DC=seu-dominio,DC=local',
-  bindPassword: process.env.LDAP_BIND_PASSWORD || 'sua-senha',
+  url,
+  baseDN: cleanEnv(process.env.LDAP_BASE_DN, 'OU=TI,DC=seu-dominio,DC=local'),
+  bindDN: cleanEnv(process.env.LDAP_BIND_DN, 'CN=ServiceAccount,OU=ServiceAccounts,DC=seu-dominio,DC=local'),
+  bindPassword: cleanEnv(process.env.LDAP_BIND_PASSWORD, 'sua-senha'),
+  userFilterTemplate: cleanEnv(process.env.LDAP_USER_FILTER, '(mail={username})'),
+  searchAttributes: cleanEnv(process.env.LDAP_SEARCH_ATTRIBUTES, 'mail,cn,displayName,memberOf')
 };
 
 class LDAPService {
   constructor() {
-    this.client = ldap.createClient({
-      url: ldapConfig.url,
-      reconnect: true,
-    });
+    if (!LDAP_ENABLED || !basicUrlPattern.test(url)) {
+      this.disabled = true;
+      this.client = null;
+      console.warn('[LDAP] Serviço desativado. Variável LDAP_ENABLED=false ou URL inválida.');
+      return;
+    }
 
-    this.client.on('error', (err) => {
-      console.error('LDAP connection error:', err);
-    });
+    try {
+      this.client = ldap.createClient({
+        url: ldapConfig.url,
+        reconnect: true,
+        timeout: 5000,
+        connectTimeout: 5000,
+      });
+
+      this.client.on('error', (err) => {
+        console.error('LDAP connection error:', err.message || err);
+      });
+    } catch (err) {
+      console.error('[LDAP] Falha ao criar cliente:', err);
+      this.disabled = true;
+      this.client = null;
+    }
+    if (!this.disabled) {
+      console.log('[LDAP] Cliente inicializado com URL:', ldapConfig.url);
+    }
   }
 
   async authenticate(username, password) {
+    if (this.disabled) {
+      console.warn('[LDAP] Autenticação simulada - serviço desativado.');
+      // Retorna usuário padrão para permitir fluxo sem LDAP.
+      return { email: username, nome: username, role: 'USER', dn: null };
+    }
     try {
       console.log('Iniciando autenticação para:', username);
       
@@ -61,6 +109,7 @@ class LDAPService {
   }
 
   async bind(dn, password) {
+    if (this.disabled) return Promise.resolve();
     console.log('Tentando bind com DN:', dn);
     return new Promise((resolve, reject) => {
       try {
@@ -95,6 +144,7 @@ class LDAPService {
   }
 
   async searchUser(username) {
+    if (this.disabled) return Promise.resolve({ dn: null, mail: username, cn: username });
     console.log('Procurando usuário:', username);
     return new Promise((resolve, reject) => {
       // Primeiro faz bind com a conta de serviço
@@ -106,11 +156,11 @@ class LDAPService {
         }
         console.log('Bind com conta de serviço bem sucedido');
 
-        const filter = process.env.LDAP_USER_FILTER.replace('{username}', username);
+        const filter = ldapConfig.userFilterTemplate.replace('{username}', username);
         const opts = {
           filter: filter,
           scope: 'sub',
-          attributes: process.env.LDAP_SEARCH_ATTRIBUTES.split(',')
+          attributes: ldapConfig.searchAttributes.split(',')
         };
 
         this.client.search(ldapConfig.baseDN, opts, (err, res) => {

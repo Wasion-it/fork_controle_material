@@ -41,7 +41,7 @@ WORKDIR /app
 ENV PORT=3001
 
 # Instalar apenas mysql-client mínimo
-RUN apk add --no-cache mysql-client --repository=https://dl-cdn.alpinelinux.org/alpine/latest-stable/main && \
+RUN apk add --no-cache mysql-client netcat-openbsd --repository=https://dl-cdn.alpinelinux.org/alpine/latest-stable/main && \
     rm -rf /var/cache/apk/* && \
     addgroup -g 1001 -S nodejs && \
     adduser -S nodejs -u 1001 && \
@@ -57,7 +57,8 @@ COPY --from=builder --chown=nodejs:nodejs /app/src ./src
 COPY --chown=nodejs:nodejs entrypoint.sh ./
 
 # Configurar permissões
-RUN chmod +x entrypoint.sh
+# Normalizar finais de linha para evitar erro 'no such file or directory' em Swarm
+RUN sed -i 's/\r$//' entrypoint.sh && chmod +x entrypoint.sh
 
 # Usar usuário não-root
 USER nodejs

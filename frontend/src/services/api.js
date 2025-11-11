@@ -1,6 +1,8 @@
 import { AuthService } from './auth';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+// Force same-origin path-based API for all environments to avoid DNS reliance
+const origin = typeof window !== 'undefined' ? window.location.origin : '';
+const API_URL = `${origin}/api`;
 
 const api = {
   async get(url) {

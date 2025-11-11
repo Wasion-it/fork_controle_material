@@ -6,8 +6,8 @@ services:
     command:
       - "--api.dashboard=true"
       - "--api.insecure=true" # ⚠️ desative em produção
-      - "--providers.docker=true"
-      - "--providers.docker.exposedbydefault=false"
+      - "--providers.swarm=true"
+      - "--providers.swarm.exposedbydefault=false"
       - "--entrypoints.web.address=:80"
     ports:
       - "80:80"
@@ -43,21 +43,16 @@ services:
         limits:
           cpus: "1.0"
           memory: 2G
-
+      restart_policy:
+        condition: on-failure
 
   backend:
-    image: controle_material-backend:latest
-    env_file:
+    image: controle_material-backend:20251111-1
+    env_file: 
       - .env
       - ./backend/.env
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.backend.rule=Host(`api.estoque.ti.wasion.com.br`)"
-      - "traefik.http.routers.backend.entrypoints=web"
-      - "traefik.http.services.backend.loadbalancer.server.port=3001"
     depends_on:
-      db:
-        condition: service_healthy
+      - db
     networks:
       - controle_net
     deploy:
@@ -66,18 +61,24 @@ services:
         condition: on-failure
         delay: 10s
         max_attempts: 3
-
+      labels:
+        - "traefik.enable=true"
+        - "traefik.docker.network=controle_overlay"
+        # Host-based router (kept for when DNS is available)
+        - "traefik.http.routers.backend.rule=Host(`api.estoque.ti.wasion.com.br`)"
+        - "traefik.http.routers.backend.entrypoints=web"
+        # Path-based router to avoid DNS: http://localhost/api -> backend:3001
+        - "traefik.http.routers.backend-path.rule=PathPrefix(`/api`)"
+        - "traefik.http.routers.backend-path.entrypoints=web"
+        - "traefik.http.routers.backend-path.middlewares=backend-strip"
+        - "traefik.http.routers.backend-path.priority=100"
+        - "traefik.http.middlewares.backend-strip.stripPrefix.prefixes=/api"
+        - "traefik.http.services.backend.loadbalancer.server.port=3001"
 
   frontend:
-    image: controle_material-frontend:latest
-    restart: always
+    image: controle_material-frontend:20251111-3
     environment:
-      - VITE_API_URL=http://api.estoque.ti.wasion.com.br
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.frontend.rule=Host(`estoque.ti.wasion.com.br`)"
-      - "traefik.http.routers.frontend.entrypoints=web"
-      - "traefik.http.services.frontend.loadbalancer.server.port=80"
+      - VITE_API_URL=
     depends_on:
       - backend
     networks:
@@ -88,10 +89,22 @@ services:
         condition: on-failure
         delay: 10s
         max_attempts: 3
+      labels:
+        - "traefik.enable=true"
+        - "traefik.docker.network=controle_overlay"
+        # Host-based router (kept for when DNS is available)
+        - "traefik.http.routers.frontend.rule=Host(`estoque.ti.wasion.com.br`)"
+        - "traefik.http.routers.frontend.entrypoints=web"
+        # Path-based catch-all to serve SPA at http://localhost/
+        - "traefik.http.routers.frontend-root.rule=PathPrefix(`/`)"
+        - "traefik.http.routers.frontend-root.entrypoints=web"
+        - "traefik.http.routers.frontend-root.priority=10"
+        - "traefik.http.services.frontend.loadbalancer.server.port=80"
 
 volumes:
   db_data:
 
 networks:
   controle_net:
-    driver: overlay
+    external: true
+    name: controle_overlay

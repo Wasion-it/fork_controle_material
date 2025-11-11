@@ -1,4 +1,6 @@
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+// Force same-origin /api usage to remove DNS dependency
+const origin = typeof window !== 'undefined' ? window.location.origin : '';
+const API_URL = `${origin}/api`;
 
 export const AuthService = {
   async login(email, password) {
