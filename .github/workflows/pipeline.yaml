@@ -15,25 +15,55 @@ env:
   STACK_NAME: controle_estoque
 
 jobs:
-  deploy:
-    name: Build and Deploy to Swarm
-    runs-on: self-hosted
+  build:
+    name: Build and Push Images
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Copy files to server and deploy
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+        with:
+          driver-opts: network=host
+
+      - name: Build backend image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./backend
+          file: ./backend/Dockerfile
+          tags: |
+            ${{ env.DOCKER_REGISTRY }}/controle_material-backend:latest
+            ${{ env.DOCKER_REGISTRY }}/controle_material-backend:${{ github.sha }}
+          outputs: type=docker,dest=/tmp/backend-image.tar
+
+      - name: Build frontend image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./frontend
+          file: ./frontend/Dockerfile
+          tags: |
+            ${{ env.DOCKER_REGISTRY }}/controle_material-frontend:latest
+            ${{ env.DOCKER_REGISTRY }}/controle_material-frontend:${{ github.sha }}
+          outputs: type=docker,dest=/tmp/frontend-image.tar
+
+      - name: Copy images to server
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ env.DEPLOY_HOST }}
           username: ${{ env.DEPLOY_USER }}
           port: ${{ env.DEPLOY_PORT }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          source: "."
-          target: ${{ env.PROJECT_DIR }}
-          rm: false
+          source: "/tmp/backend-image.tar,/tmp/frontend-image.tar"
+          target: "/tmp/"
+          strip_components: 1
 
-      - name: Build and Deploy on Server
+  deploy:
+    name: Deploy to Swarm
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy on Server
         uses: appleboy/ssh-action@v1.0.0
         with:
           host: ${{ env.DEPLOY_HOST }}
@@ -41,28 +71,25 @@ jobs:
           port: ${{ env.DEPLOY_PORT }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
-            cd ${{ env.PROJECT_DIR }}
+            # Load images
+            echo "📦 Loading backend image..."
+            docker load -i /tmp/backend-image.tar
             
-            # Build das imagens no servidor
-            echo "🔨 Building backend image..."
-            docker build -t ${{ env.DOCKER_REGISTRY }}/controle_material-backend:latest \
-                         -t ${{ env.DOCKER_REGISTRY }}/controle_material-backend:${{ github.sha }} \
-                         ./backend
-            
-            echo "🔨 Building frontend image..."
-            docker build -t ${{ env.DOCKER_REGISTRY }}/controle_material-frontend:latest \
-                         -t ${{ env.DOCKER_REGISTRY }}/controle_material-frontend:${{ github.sha }} \
-                         ./frontend
+            echo "📦 Loading frontend image..."
+            docker load -i /tmp/frontend-image.tar
             
             # Push para registry local
-            echo "📦 Pushing images to local registry..."
+            echo "🚀 Pushing to local registry..."
             docker push ${{ env.DOCKER_REGISTRY }}/controle_material-backend:latest
             docker push ${{ env.DOCKER_REGISTRY }}/controle_material-backend:${{ github.sha }}
             docker push ${{ env.DOCKER_REGISTRY }}/controle_material-frontend:latest
             docker push ${{ env.DOCKER_REGISTRY }}/controle_material-frontend:${{ github.sha }}
             
+            # Limpar imagens temporárias
+            rm -f /tmp/backend-image.tar /tmp/frontend-image.tar
+            
             # Atualizar serviços
-            echo "🚀 Updating services..."
+            echo "🔄 Updating services..."
             export MYSQL_DATABASE=${{ env.MYSQL_DATABASE }}
             export DOCKER_REGISTRY=${{ env.DOCKER_REGISTRY }}
             
