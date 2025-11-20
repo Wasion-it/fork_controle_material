@@ -1,0 +1,82 @@
+name: Pipeline CI/CD
+
+on:
+  push:
+    branches:
+      - main
+
+env:
+  DEPLOY_HOST: 10.10.1.222
+  DEPLOY_USER: root
+  DEPLOY_PORT: 22
+  PROJECT_DIR: /home/admin-ti/controle_material
+  DOCKER_REGISTRY: 10.10.1.222:5000
+  MYSQL_DATABASE: controle_material
+  STACK_NAME: controle_estoque
+
+jobs:
+  deploy:
+    name: Build and Deploy to Swarm
+    runs-on: self-hosted
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Copy files to server and deploy
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ env.DEPLOY_HOST }}
+          username: ${{ env.DEPLOY_USER }}
+          port: ${{ env.DEPLOY_PORT }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          source: "."
+          target: ${{ env.PROJECT_DIR }}
+          rm: false
+
+      - name: Build and Deploy on Server
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ env.DEPLOY_HOST }}
+          username: ${{ env.DEPLOY_USER }}
+          port: ${{ env.DEPLOY_PORT }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            cd ${{ env.PROJECT_DIR }}
+            
+            # Build das imagens no servidor
+            echo "🔨 Building backend image..."
+            docker build -t ${{ env.DOCKER_REGISTRY }}/controle_material-backend:latest \
+                         -t ${{ env.DOCKER_REGISTRY }}/controle_material-backend:${{ github.sha }} \
+                         ./backend
+            
+            echo "🔨 Building frontend image..."
+            docker build -t ${{ env.DOCKER_REGISTRY }}/controle_material-frontend:latest \
+                         -t ${{ env.DOCKER_REGISTRY }}/controle_material-frontend:${{ github.sha }} \
+                         ./frontend
+            
+            # Push para registry local
+            echo "📦 Pushing images to local registry..."
+            docker push ${{ env.DOCKER_REGISTRY }}/controle_material-backend:latest
+            docker push ${{ env.DOCKER_REGISTRY }}/controle_material-backend:${{ github.sha }}
+            docker push ${{ env.DOCKER_REGISTRY }}/controle_material-frontend:latest
+            docker push ${{ env.DOCKER_REGISTRY }}/controle_material-frontend:${{ github.sha }}
+            
+            # Atualizar serviços
+            echo "🚀 Updating services..."
+            export MYSQL_DATABASE=${{ env.MYSQL_DATABASE }}
+            export DOCKER_REGISTRY=${{ env.DOCKER_REGISTRY }}
+            
+            docker service update --image ${{ env.DOCKER_REGISTRY }}/controle_material-backend:latest ${{ env.STACK_NAME }}_backend
+            docker service update --image ${{ env.DOCKER_REGISTRY }}/controle_material-frontend:latest ${{ env.STACK_NAME }}_frontend
+            
+            # Aguardar rollout
+            echo "⏳ Aguardando rollout..."
+            sleep 10
+            
+            # Verificar status
+            echo "✅ Status dos serviços:"
+            docker service ls
+            docker service ps ${{ env.STACK_NAME }}_backend --no-trunc | head -n 3
+            docker service ps ${{ env.STACK_NAME }}_frontend --no-trunc | head -n 3
+            
+            echo "🎉 Deploy concluído!"

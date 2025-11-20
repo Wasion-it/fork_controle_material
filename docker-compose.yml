@@ -24,16 +24,21 @@ services:
   db:
     image: mysql:8.0
     command: ["--default-authentication-plugin=mysql_native_password"]
-    env_file:
-      - .env
+    environment:
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_ROOT_PASSWORD_FILE: /run/secrets/mysql_root_password
+      MYSQL_USER_FILE: /run/secrets/mysql_user
+      MYSQL_PASSWORD_FILE: /run/secrets/mysql_password
     volumes:
       - db_data:/var/lib/mysql
     networks:
       - controle_overlay
-    ports:
-    - "3306:3306"  # <--- adiciona isso
+    secrets:
+      - mysql_root_password
+      - mysql_user
+      - mysql_password
     healthcheck:
-      test: ["CMD-SHELL", "mysqladmin ping -h localhost -uroot -p${MYSQL_ROOT_PASSWORD}"]
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
       interval: 10s
       timeout: 10s
       retries: 15
@@ -47,7 +52,7 @@ services:
         condition: on-failure
 
   backend:
-    image: controle_material-backend:20251111-1
+    image: ${DOCKER_REGISTRY:-10.10.1.222:5000}/controle_material-backend:latest
     env_file: 
       - .env
       - ./backend/.env
@@ -55,6 +60,10 @@ services:
       - db
     networks:
       - controle_overlay
+    secrets:
+      - jwt_secret
+      - ldap_bind_password
+      - database_url
     deploy:
       replicas: 1
       restart_policy:
@@ -74,7 +83,7 @@ services:
         - "traefik.http.services.backend.loadbalancer.server.port=3001"
 
   frontend:
-    image: controle_material-frontend:20251111-3
+    image: ${DOCKER_REGISTRY:-10.10.1.222:5000}/controle_material-frontend:latest
     environment:
       - VITE_API_URL=http://api.estoque.ti.wasion.com.br/api
     depends_on:
@@ -102,4 +111,18 @@ volumes:
 
 networks:
   controle_overlay:
+    external: true
+
+secrets:
+  mysql_root_password:
+    external: true
+  mysql_user:
+    external: true
+  mysql_password:
+    external: true
+  jwt_secret:
+    external: true
+  ldap_bind_password:
+    external: true
+  database_url:
     external: true
