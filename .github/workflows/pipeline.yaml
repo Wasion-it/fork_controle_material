@@ -47,6 +47,37 @@ jobs:
             ${{ env.DOCKER_REGISTRY }}/controle_material-frontend:${{ github.sha }}
           outputs: type=docker,dest=/tmp/frontend-image.tar
 
+      - name: Upload backend image artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-image
+          path: /tmp/backend-image.tar
+          retention-days: 1
+
+      - name: Upload frontend image artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-image
+          path: /tmp/frontend-image.tar
+          retention-days: 1
+
+  deploy:
+    name: Deploy to Swarm
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download backend image
+        uses: actions/download-artifact@v4
+        with:
+          name: backend-image
+          path: /tmp/
+
+      - name: Download frontend image
+        uses: actions/download-artifact@v4
+        with:
+          name: frontend-image
+          path: /tmp/
+
       - name: Copy images to server
         uses: appleboy/scp-action@v0.1.7
         with:
@@ -58,11 +89,6 @@ jobs:
           target: "/tmp/"
           strip_components: 1
 
-  deploy:
-    name: Deploy to Swarm
-    needs: build
-    runs-on: ubuntu-latest
-    steps:
       - name: Deploy on Server
         uses: appleboy/ssh-action@v1.0.0
         with:
