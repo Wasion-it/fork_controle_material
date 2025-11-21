@@ -17,48 +17,41 @@ env:
 jobs:
   build:
     name: Build and Push Images
-    runs-on: self-hosted  # Runner local na sua rede
+    runs-on: self-hosted
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-        with:
-          driver-opts: network=host
-
       - name: Build backend image
-        uses: docker/build-push-action@v5
-        with:
-          context: ./backend
-          file: ./backend/Dockerfile
-          tags: |
-            ${{ env.DOCKER_REGISTRY }}/controle_material-backend:latest
-            ${{ env.DOCKER_REGISTRY }}/controle_material-backend:${{ github.sha }}
-          outputs: type=docker,dest=/tmp/backend-image.tar
+        run: |
+          docker build -t ${{ env.DOCKER_REGISTRY }}/controle_material-backend:latest \
+                       -t ${{ env.DOCKER_REGISTRY }}/controle_material-backend:${{ github.sha }} \
+                       ./backend
+          docker save -o backend-image.tar \
+                      ${{ env.DOCKER_REGISTRY }}/controle_material-backend:latest \
+                      ${{ env.DOCKER_REGISTRY }}/controle_material-backend:${{ github.sha }}
 
       - name: Build frontend image
-        uses: docker/build-push-action@v5
-        with:
-          context: ./frontend
-          file: ./frontend/Dockerfile
-          tags: |
-            ${{ env.DOCKER_REGISTRY }}/controle_material-frontend:latest
-            ${{ env.DOCKER_REGISTRY }}/controle_material-frontend:${{ github.sha }}
-          outputs: type=docker,dest=/tmp/frontend-image.tar
+        run: |
+          docker build -t ${{ env.DOCKER_REGISTRY }}/controle_material-frontend:latest \
+                       -t ${{ env.DOCKER_REGISTRY }}/controle_material-frontend:${{ github.sha }} \
+                       ./frontend
+          docker save -o frontend-image.tar \
+                      ${{ env.DOCKER_REGISTRY }}/controle_material-frontend:latest \
+                      ${{ env.DOCKER_REGISTRY }}/controle_material-frontend:${{ github.sha }}
 
       - name: Upload backend image artifact
         uses: actions/upload-artifact@v4
         with:
           name: backend-image
-          path: /tmp/backend-image.tar
+          path: backend-image.tar
           retention-days: 1
 
       - name: Upload frontend image artifact
         uses: actions/upload-artifact@v4
         with:
           name: frontend-image
-          path: /tmp/frontend-image.tar
+          path: frontend-image.tar
           retention-days: 1
 
   deploy:

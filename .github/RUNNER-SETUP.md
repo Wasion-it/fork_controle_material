@@ -126,9 +126,7 @@ sudo ./svc.sh status
 
 ## 🔐 Permissões Docker
 
-**Como o runner está no mesmo servidor, não precisa SSH!**
-
-Apenas certifique-se que o usuário do runner tem permissões Docker:
+**⚠️ CRÍTICO**: O runner precisa ter permissões Docker!
 
 ```bash
 # Adicionar usuário ao grupo docker
@@ -140,7 +138,12 @@ newgrp docker
 # Testar
 docker ps
 docker service ls
+docker build --help
+
+# Se funcionar sem sudo, está OK! ✅
 ```
+
+**Se tiver problemas de permissão**, veja o guia completo: **[FIX-DOCKER-PERMISSIONS.md](./FIX-DOCKER-PERMISSIONS.md)**
 
 ---
 
