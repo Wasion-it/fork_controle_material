@@ -13,16 +13,20 @@
 
 ### 1️⃣ Instalar Self-Hosted Runner
 
-**⚠️ IMPORTANTE**: A pipeline precisa de um runner na sua rede local.
+**⚠️ IMPORTANTE**: Instale o runner **no servidor 10.10.1.222** (mesmo servidor do Swarm).
 
 Siga o guia completo: **[RUNNER-SETUP.md](./RUNNER-SETUP.md)**
 
 Resumo rápido:
 ```bash
-# No servidor ou máquina da rede 10.10.1.x
-mkdir actions-runner && cd actions-runner
-# Baixar runner (comando fornecido pelo GitHub)
-# Configurar e instalar como serviço
+# SSH no servidor
+ssh root@10.10.1.222
+
+# Criar diretório
+mkdir -p ~/actions-runner && cd ~/actions-runner
+
+# Baixar e configurar runner (comando fornecido pelo GitHub)
+# Instalar como serviço: sudo ./svc.sh install
 ```
 
 ### 2️⃣ Instalar GitHub CLI
@@ -66,25 +70,7 @@ gh auth login
 # Escolha: GitHub.com → HTTPS → Yes → Login with a browser
 ```
 
-### 4️⃣ Configurar Secrets (Opcional)
-
-> **Nota**: Como estamos usando self-hosted runner, SSH_PRIVATE_KEY não é mais necessário.
-> O runner já tem acesso direto ao servidor via SSH.
-
-**Windows**:
-```powershell
-cd .github
-.\setup-secrets.ps1
-```
-
-**Linux**:
-```bash
-cd .github
-chmod +x setup-secrets.sh
-./setup-secrets.sh
-```
-
-### 5️⃣ Preparar Servidor
+### 4️⃣ Preparar Servidor
 
 ```bash
 # SSH no servidor

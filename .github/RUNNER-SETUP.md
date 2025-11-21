@@ -2,22 +2,22 @@
 
 ## Por que Self-Hosted Runner?
 
-O pipeline precisa acessar recursos da rede privada corporativa:
-- **Servidor de deploy**: 10.10.1.222 (SSH/SCP)
+O pipeline precisa acessar recursos do Docker Swarm local:
+- **Docker Swarm**: Gerenciamento de serviços
 - **Docker Registry**: 10.10.1.222:5000
 - **MySQL/LDAP**: Recursos internos da Wasion America
 
-GitHub Actions cloud runners não têm acesso à rede privada, por isso usamos um runner local.
+GitHub Actions cloud runners não têm acesso à infraestrutura local, por isso usamos um runner **no mesmo servidor do Swarm (10.10.1.222)**.
 
 ---
 
 ## 🔧 Pré-requisitos
 
-Máquina Windows/Linux na rede 10.10.1.x com:
-- Docker instalado
+**Servidor 10.10.1.222** (onde roda o Docker Swarm) com:
+- Docker instalado e Swarm inicializado
 - Git instalado
-- Acesso SSH ao servidor 10.10.1.222
-- Conectividade com registry 10.10.1.222:5000
+- Acesso ao registry local (10.10.1.222:5000)
+- Usuário com permissões Docker (sem sudo)
 
 ---
 
@@ -39,9 +39,11 @@ Selecione:
 
 ### 3️⃣ Baixar e Configurar (Linux)
 
+**Execute no servidor 10.10.1.222:**
+
 ```bash
 # Criar diretório do runner
-mkdir actions-runner && cd actions-runner
+mkdir -p ~/actions-runner && cd ~/actions-runner
 
 # Baixar última versão (exemplo)
 curl -o actions-runner-linux-x64-2.311.0.tar.gz -L \
@@ -122,22 +124,23 @@ sudo ./svc.sh status
 
 ---
 
-## 🔐 Configurar SSH (se necessário)
+## 🔐 Permissões Docker
 
-Se o runner precisa acessar 10.10.1.222 via SSH:
+**Como o runner está no mesmo servidor, não precisa SSH!**
+
+Apenas certifique-se que o usuário do runner tem permissões Docker:
 
 ```bash
-# Gerar chave SSH (se ainda não tiver)
-ssh-keygen -t ed25519 -C "github-runner"
+# Adicionar usuário ao grupo docker
+sudo usermod -aG docker $USER
 
-# Copiar chave pública para servidor
-ssh-copy-id root@10.10.1.222
+# Aplicar mudanças (ou fazer logout/login)
+newgrp docker
 
-# Testar conexão
-ssh -o StrictHostKeyChecking=no root@10.10.1.222 "echo 'SSH OK'"
+# Testar
+docker ps
+docker service ls
 ```
-
-**IMPORTANTE**: O pipeline usa SSH/SCP direto (não via secrets), então a máquina do runner deve ter autenticação SSH configurada.
 
 ---
 
@@ -158,14 +161,15 @@ Applications and Services Logs → GitHub Actions Runner
 ### Verificar Conectividade
 
 ```bash
-# Testar SSH
-ssh root@10.10.1.222 "docker ps"
+# Testar Docker Swarm
+docker node ls
+docker service ls
 
 # Testar Registry
-curl http://10.10.1.222:5000/v2/_catalog
+curl http://localhost:5000/v2/_catalog
 
-# Testar Docker
-docker info
+# Testar acesso aos serviços
+docker service ps controle_estoque_backend
 ```
 
 ### Problemas Comuns
@@ -244,12 +248,12 @@ rm -rf actions-runner
 
 ---
 
-## 📌 Checklist Pós-Instalação
+## 📏 Checklist Pós-Instalação
 
-- [ ] Runner aparece como **🟢 Idle** no GitHub
-- [ ] SSH para 10.10.1.222 funciona sem senha
+- [ ] Runner aparece como **🜢 Idle** no GitHub
 - [ ] `docker ps` executa sem erros
-- [ ] Registry 10.10.1.222:5000 está acessível
+- [ ] `docker service ls` mostra serviços do Swarm
+- [ ] Registry localhost:5000 está acessível
 - [ ] Runner configurado como serviço (inicia com o sistema)
 - [ ] Pipeline de teste executou com sucesso
 

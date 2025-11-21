@@ -64,7 +64,7 @@ jobs:
   deploy:
     name: Deploy to Swarm
     needs: build
-    runs-on: self-hosted  # Runner local na sua rede
+    runs-on: self-hosted  # Runner no mesmo servidor do Swarm
     steps:
       - name: Download backend image
         uses: actions/download-artifact@v4
@@ -76,48 +76,40 @@ jobs:
         with:
           name: frontend-image
 
-      - name: Deploy on Server
+      - name: Deploy Locally
         env:
           DOCKER_REGISTRY: ${{ env.DOCKER_REGISTRY }}
           STACK_NAME: ${{ env.STACK_NAME }}
         run: |
-          # Copiar imagens para o servidor via SCP
-          scp -o StrictHostKeyChecking=no backend-image.tar ${{ env.DEPLOY_USER }}@${{ env.DEPLOY_HOST }}:/tmp/
-          scp -o StrictHostKeyChecking=no frontend-image.tar ${{ env.DEPLOY_USER }}@${{ env.DEPLOY_HOST }}:/tmp/
-          
-          # Executar deploy no servidor via SSH
-          ssh -o StrictHostKeyChecking=no ${{ env.DEPLOY_USER }}@${{ env.DEPLOY_HOST }} << 'EOF'
-            # Load images
-            echo "📦 Loading backend image..."
-            docker load -i /tmp/backend-image.tar
+          echo "📦 Loading backend image..."
+          docker load -i backend-image.tar
 
-            echo "📦 Loading frontend image..."
-            docker load -i /tmp/frontend-image.tar
+          echo "📦 Loading frontend image..."
+          docker load -i frontend-image.tar
 
-            # Push para registry local
-            echo "🚀 Pushing to local registry..."
-            docker push ${{ env.DOCKER_REGISTRY }}/controle_material-backend:latest
-            docker push ${{ env.DOCKER_REGISTRY }}/controle_material-backend:${{ github.sha }}
-            docker push ${{ env.DOCKER_REGISTRY }}/controle_material-frontend:latest
-            docker push ${{ env.DOCKER_REGISTRY }}/controle_material-frontend:${{ github.sha }}
+          echo "🚀 Pushing to local registry..."
+          docker push ${{ env.DOCKER_REGISTRY }}/controle_material-backend:latest
+          docker push ${{ env.DOCKER_REGISTRY }}/controle_material-backend:${{ github.sha }}
+          docker push ${{ env.DOCKER_REGISTRY }}/controle_material-frontend:latest
+          docker push ${{ env.DOCKER_REGISTRY }}/controle_material-frontend:${{ github.sha }}
 
-            # Limpar imagens temporárias
-            rm -f /tmp/backend-image.tar /tmp/frontend-image.tar
+          echo "🧹 Cleaning up tar files..."
+          rm -f backend-image.tar frontend-image.tar
 
-            # Atualizar serviços
-            echo "🔄 Updating services..."
-            docker service update --image ${{ env.DOCKER_REGISTRY }}/controle_material-backend:latest ${{ env.STACK_NAME }}_backend
-            docker service update --image ${{ env.DOCKER_REGISTRY }}/controle_material-frontend:latest ${{ env.STACK_NAME }}_frontend
+          echo "🔄 Updating Swarm services..."
+          docker service update --image ${{ env.DOCKER_REGISTRY }}/controle_material-backend:latest ${{ env.STACK_NAME }}_backend
+          docker service update --image ${{ env.DOCKER_REGISTRY }}/controle_material-frontend:latest ${{ env.STACK_NAME }}_frontend
 
-            # Aguardar rollout
-            echo "⏳ Aguardando rollout..."
-            sleep 10
+          echo "⏳ Waiting for rollout..."
+          sleep 10
 
-            # Verificar status
-            echo "✅ Status dos serviços:"
-            docker service ls
-            docker service ps ${{ env.STACK_NAME }}_backend --no-trunc | head -n 3
-            docker service ps ${{ env.STACK_NAME }}_frontend --no-trunc | head -n 3
+          echo "✅ Service status:"
+          docker service ls | grep ${{ env.STACK_NAME }}
+          echo ""
+          echo "Backend replicas:"
+          docker service ps ${{ env.STACK_NAME }}_backend --format "table {{.Name}}\t{{.CurrentState}}\t{{.Error}}" | head -n 3
+          echo ""
+          echo "Frontend replicas:"
+          docker service ps ${{ env.STACK_NAME }}_frontend --format "table {{.Name}}\t{{.CurrentState}}\t{{.Error}}" | head -n 3
 
-            echo "🎉 Deploy concluído!"
-          EOF
+          echo "🎉 Deploy completed successfully!"
